@@ -9,12 +9,17 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new() -> Self {
-        Default::default()
+    /// Creates a new `Node`.
+    pub fn new(args: String, executed: bool) -> Self {
+        Node {
+            args: args,
+            executed: executed,
+        }
     }
 }
 
 impl Default for Node {
+    /// Constructs a default Node instance with empty args.
     fn default() -> Self {
         Node {
             // computation: |args| return Ok(args),
@@ -40,6 +45,12 @@ impl fmt::Display for Node {
 impl FromStr for Node {
     type Err = Error;
     /// Parses `Node` from a string like: "Struct Node, Node.args: "", Node.executed: false"
+    ///
+    /// The following two `Node`s are identical:
+    /// ```
+    /// let node_from_string = Node::from_str("Struct Node, Node.args: "", Node.executed: false");
+    /// let node_instantiated = Node::new(String::from(""), false);
+    /// ```
     fn from_str(node_string: &str) -> Result<Self> {
         let mut node = Node {
             args: String::from(""),

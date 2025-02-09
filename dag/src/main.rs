@@ -5,7 +5,7 @@ use std::{fs::read_to_string, str::FromStr};
 fn main() -> anyhow::Result<()> {
     // Create new Directed Acyclic Graph
     let g = DirectedAcyclicGraph::new(
-        vec![Node::new(), Node::new(), Node::new(), Node::new()],
+        vec![Node::default(), Node::default(), Node::default(), Node::new(String::from("Arg example"), false)],
         // vec![Edge::new((0, 1), 1), Edge::new((1, 2), 7), Edge::new((2, 3), 1), Edge::new((1, 3), 3)],
         vec![Edge::new((0, 1)), Edge::new((1, 2)), Edge::new((2, 3)), Edge::new((1, 3))],
     )?;
