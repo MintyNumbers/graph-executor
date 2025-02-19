@@ -1,0 +1,42 @@
+use anyhow::{anyhow, Error, Result};
+use std::{fmt, str::FromStr};
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum ExecutionStatus {
+    Executed,
+    Executable,
+    NonExecutable,
+}
+
+impl fmt::Display for ExecutionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ExecutionStatus::Executed => "Executed",
+                ExecutionStatus::Executable => "Executable",
+                ExecutionStatus::NonExecutable => "NonExecutable",
+            }
+        )
+    }
+}
+
+impl FromStr for ExecutionStatus {
+    type Err = Error;
+    /// Parses `ExecutionStatus` from a string like: "Executed".
+    ///
+    /// The following two `ExecutionStatus` are identical:
+    /// ```
+    /// let execution_status_from_string = ExecutionStatus::from_str("Executed");
+    /// let execution_status_instantiated = ExecutionStatus::Executed;
+    /// ```
+    fn from_str(execution_status_string: &str) -> Result<Self> {
+        match execution_status_string {
+            "Executed" => Ok(ExecutionStatus::Executed),
+            "Executable" => Ok(ExecutionStatus::Executable),
+            "NonExecutable" => Ok(ExecutionStatus::NonExecutable),
+            _ => Err(anyhow!("ExecutionStatus::from_str parsing error: Invalid execution status.")),
+        }
+    }
+}

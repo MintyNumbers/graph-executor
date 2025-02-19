@@ -1,20 +1,34 @@
 mod graph_structure;
+mod shared_memory;
+
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
+// use graph_structure::graph::DirectedAcyclicGraph;
+use shared_memory::shm_mapping::ShmMapping;
 use std::{fs::read_to_string, str::FromStr};
 
 fn main() -> anyhow::Result<()> {
-    // Create new Directed Acyclic Graph
+    // Create new `DirectedAcyclicGraph`.
     let g = DirectedAcyclicGraph::new(
-        vec![Node::default(), Node::default(), Node::default(), Node::new(String::from("Arg example"), false)],
-        // vec![Edge::new((0, 1), 1), Edge::new((1, 2), 7), Edge::new((2, 3), 1), Edge::new((1, 3), 3)],
-        vec![Edge::new((0, 1)), Edge::new((1, 2)), Edge::new((2, 3)), Edge::new((1, 3))],
+        vec![
+            Node::new(String::from("Node 0 was just executed")),
+            Node::new(String::from("Node 1 was just executed")),
+            Node::new(String::from("Node 2 was just executed")),
+            Node::new(String::from("Node 3 was just executed")),
+        ],
+        vec![Edge::new((0, 1)), /* Edge::new((1, 2)), */ Edge::new((2, 3)), Edge::new((1, 3))],
     )?;
 
-    // Write the created graph to resources/example.dot
+    // Write the created graph to resources/example.dot.
     g.write_to_path("resources/example.dot")?;
 
-    // Parse the Directed Acyclic Graph from String
-    let _ = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
+    // Parse the `DirectedAcyclicGraph` from `String`.
+    let f = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
+
+    // Create shared memory mapping with `DirectedAcyclicGraph`.
+    let mut shm_mapping = ShmMapping::new(String::from("shared_mem_mapping"), f)?;
+
+    // Execute graph.
+    shm_mapping.execute_graph()?;
 
     Ok(())
 }

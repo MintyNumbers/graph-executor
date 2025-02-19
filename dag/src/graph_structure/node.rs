@@ -1,19 +1,20 @@
+use super::execution_status::ExecutionStatus;
 use anyhow::{anyhow, Error, Result};
 use std::{fmt, str::FromStr};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Node {
-    // pub computation: fn(&str) -> anyhow::Result<&str>,
-    pub args: String,
-    pub executed: bool,
+    // computation: fn(&str) -> anyhow::Result<&str>,
+    args: String,
+    pub execution_status: ExecutionStatus,
 }
 
 impl Node {
     /// Creates a new `Node`.
-    pub fn new(args: String, executed: bool) -> Self {
+    pub fn new(args: String) -> Self {
         Node {
             args: args,
-            executed: executed,
+            execution_status: ExecutionStatus::Executable,
         }
     }
 }
@@ -24,7 +25,7 @@ impl Default for Node {
         Node {
             // computation: |args| return Ok(args),
             args: String::from(""),
-            executed: false,
+            execution_status: ExecutionStatus::Executable,
         }
     }
 }
@@ -37,7 +38,7 @@ impl fmt::Display for Node {
             // "function {:?} with args '{}' {} executed",
             // self.computation,
             self.args,
-            self.executed
+            self.execution_status
         )
     }
 }
@@ -54,34 +55,45 @@ impl FromStr for Node {
     fn from_str(node_string: &str) -> Result<Self> {
         let mut node = Node {
             args: String::from(""),
-            executed: false,
+            execution_status: ExecutionStatus::Executable,
         };
 
         for part in node_string.trim().split(',') {
             match part {
                 // Parsing `Node`'s `args`
-                part if part.starts_with("Node.args: ") => {
+                part if part.starts_with(" Node.args: ") => {
                     node.args = String::from(
-                        part.strip_prefix("Node.args: ")
-                            .ok_or_else(|| anyhow!("Node::from_str parsing error: no 'args: ' prefix despite successful check."))?,
+                        part.strip_prefix(" Node.args: ")
+                            .ok_or(anyhow!("Node::from_str parsing error: no 'args: ' prefix despite successful check."))?,
                     )
                 }
                 // Parsing `Node`'s `executed` status
                 part if part.starts_with(" Node.executed: ") => {
-                    node.executed = if part
-                        .strip_prefix(" Node.executed: ")
-                        .ok_or_else(|| anyhow!("Node::from_str parsing error: no ' executed: ' prefix despite successful check."))?
-                        == "true"
-                    {
-                        true
-                    } else {
-                        false
-                    }
+                    node.execution_status = ExecutionStatus::from_str(
+                        part.strip_prefix(" Node.executed: ")
+                            .ok_or(anyhow!("Node::from_str parsing error: no ' executed: ' prefix despite successful check."))?,
+                    )?;
                 }
                 _ => (),
             }
         }
 
         Ok(node)
+    }
+}
+
+impl Node {
+    pub fn execute(&mut self) -> Result<()> {
+        match self.execution_status {
+            ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
+            ExecutionStatus::NonExecutable => return Err(anyhow!("Trying to execute node which is not executable.")),
+            ExecutionStatus::Executable => {
+                // TODO: execute node
+                println!("{}", self.args);
+
+                self.execution_status = ExecutionStatus::Executed;
+                Ok(())
+            }
+        }
     }
 }
