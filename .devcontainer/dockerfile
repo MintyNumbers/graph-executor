@@ -1,0 +1,7 @@
+FROM mcr.microsoft.com/devcontainers/rust:1.0.20-bookworm
+
+# Install graphviz-rs dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y graphviz
+
+USER vscode
+
