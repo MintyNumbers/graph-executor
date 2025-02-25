@@ -1,6 +1,6 @@
 use crate::graph_structure::graph::DirectedAcyclicGraph;
 use anyhow::{anyhow, Result};
-use raw_sync::locks::*;
+use raw_sync::locks::{LockImpl, LockInit, Mutex};
 use shared_memory::ShmemConf;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -30,14 +30,14 @@ impl ShmMapping {
             .map_err(|e| anyhow!("Unable to create new shared memory section {}: {}", &shm_mapping.shmem_flink, e))?;
 
         // Initialize `raw_ptr`.
-        let mut raw_ptr: *mut u8 = shmem.as_ptr(); // Separate initialization required to prevent segmentation fault: core dump.
+        let mut raw_ptr: *mut u8 = shmem.as_ptr();
         let is_init: &mut AtomicU8;
         unsafe {
             is_init = &mut *(raw_ptr as *mut u8 as *mut AtomicU8);
             raw_ptr = raw_ptr.add(8);
         };
 
-        // Initialize mutex.
+        // Initialize (cross-process) `raw_sync::locks::Mutex`.
         is_init.store(0, Ordering::Relaxed);
         unsafe {
             Mutex::new(
