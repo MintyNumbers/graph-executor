@@ -1,9 +1,11 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
 use anyhow::{anyhow, Error, Result};
+use core::{mem::size_of, slice::from_raw_parts};
 use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, Direction};
-use std::{collections::VecDeque, fmt, fs::write, str::FromStr};
+use std::{collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut, str::FromStr};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[repr(C)] // Guarantee stable layout across executions
 pub struct DirectedAcyclicGraph {
     // graph: Arc<Mutex<StableDiGraph<Node, i32>>>,
     graph: StableDiGraph<Node, i32>,
@@ -53,6 +55,19 @@ impl FromStr for DirectedAcyclicGraph {
     }
 }
 
+impl Index<NodeIndex> for DirectedAcyclicGraph {
+    type Output = Node;
+    fn index(&self, index: NodeIndex) -> &Self::Output {
+        &self.graph[index]
+    }
+}
+
+impl IndexMut<NodeIndex> for DirectedAcyclicGraph {
+    fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
+        &mut self.graph[index]
+    }
+}
+
 impl DirectedAcyclicGraph {
     /// Creates `DirectedAcyclicGraph` from `Vec<Node>` and `Vec<Edge>`.
     ///
@@ -85,6 +100,16 @@ impl DirectedAcyclicGraph {
         // Check that `StableDiGraph` is acyclic and return `DirectedAcyclicGraph` if successful.
         Acyclic::try_from_graph(&graph).map_err(|e| anyhow!("Cyclic graph supplied on {:?}", e.node_id()))?;
         Ok(DirectedAcyclicGraph { graph: graph })
+    }
+
+    /// Casts `DirectedAcyclicGraph` as its byte representation.
+    pub unsafe fn as_bytes(&self) -> &[u8] {
+        from_raw_parts((self as *const DirectedAcyclicGraph) as *const u8, size_of::<DirectedAcyclicGraph>())
+    }
+
+    /// Casts byte representation as `DirectedAcyclicGraph`.
+    pub unsafe fn from_bytes(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const DirectedAcyclicGraph)
     }
 
     /// Write `DirectedAcyclicGraph` to `path`.
@@ -138,19 +163,19 @@ impl DirectedAcyclicGraph {
             });
         }
 
-        // TODO: Implement parallel node execution.
+        // // TODO: Implement parallel node execution.
 
-        // Get executable (parent) nodes.
+        // // Get executable (parent) nodes.
         // let mut executable_nodes = self.get_executable_node_indeces();
 
-        // Get number of threads.
+        // // Get number of threads.
         // let num_threads = if num_cpus::get() > executable_nodes.len() {
         //     executable_nodes.len() // If more cores than executable nodes, spawn a thread for each executable node.
         // } else {
         //     num_cpus::get() // If more executable nodes than cores, spawn a thread for each core.
         // };
 
-        // Spawn threads.
+        // // Spawn threads.
         // let mut threads = Vec::with_capacity(num_threads);
         // for _ in 0..num_threads {
         //     let _i = executable_nodes.pop_front().ok_or(anyhow!("No executable nodes found."))?;
@@ -166,7 +191,7 @@ impl DirectedAcyclicGraph {
         //     }));
         // }
 
-        // Wait for threads to exit.
+        // // Wait for threads to exit.
         // for t in threads.drain(..) {
         //     let _ = t.join().map_err(|e| anyhow!("Unable to join thread: {:?}", e))?;
         // }
