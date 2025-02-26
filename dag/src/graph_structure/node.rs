@@ -86,10 +86,12 @@ impl Node {
     pub fn execute(&mut self) -> Result<()> {
         match self.execution_status {
             ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
+            ExecutionStatus::Executing => return Err(anyhow!("Trying to execute node which is currently being executed.")),
             ExecutionStatus::NonExecutable => return Err(anyhow!("Trying to execute node which is not executable.")),
             ExecutionStatus::Executable => {
-                // TODO: execute node
-                println!("{}", self.args);
+                self.execution_status = ExecutionStatus::Executing;
+
+                println!("{}", self.args); // TODO: implement node execution.
 
                 self.execution_status = ExecutionStatus::Executed;
                 Ok(())

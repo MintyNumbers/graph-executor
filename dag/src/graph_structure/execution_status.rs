@@ -4,6 +4,7 @@ use std::{fmt, str::FromStr};
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum ExecutionStatus {
     Executed,
+    Executing,
     Executable,
     NonExecutable,
 }
@@ -15,6 +16,7 @@ impl fmt::Display for ExecutionStatus {
             "{}",
             match self {
                 ExecutionStatus::Executed => "Executed",
+                ExecutionStatus::Executing => "Executing",
                 ExecutionStatus::Executable => "Executable",
                 ExecutionStatus::NonExecutable => "NonExecutable",
             }
@@ -34,6 +36,7 @@ impl FromStr for ExecutionStatus {
     fn from_str(execution_status_string: &str) -> Result<Self> {
         match execution_status_string {
             "Executed" => Ok(ExecutionStatus::Executed),
+            "Executing" => Ok(ExecutionStatus::Executing),
             "Executable" => Ok(ExecutionStatus::Executable),
             "NonExecutable" => Ok(ExecutionStatus::NonExecutable),
             _ => Err(anyhow!("ExecutionStatus::from_str parsing error: Invalid execution status.")),
