@@ -5,8 +5,10 @@ pub mod node;
 
 #[cfg(test)]
 mod tests {
+    use petgraph::graph::NodeIndex;
+
     use super::{edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node};
-    use std::str::FromStr;
+    use std::{collections::VecDeque, str::FromStr, vec};
 
     // `Edge` tests
 
@@ -78,8 +80,8 @@ mod tests {
     // `DirectedAcyclicGraph` tests
 
     #[test]
-    fn dag_compare_equality_from_str_new() {
-        let g = DirectedAcyclicGraph::new(
+    fn dag_compare_equality_new_from_str_from_bytes() {
+        let graph = DirectedAcyclicGraph::new(
             vec![
                 Node::new(String::from("Node 0 was just executed")),
                 Node::new(String::from("Node 1 was just executed")),
@@ -89,8 +91,51 @@ mod tests {
             vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
-        let f = DirectedAcyclicGraph::from_str(&format!("{}", g)).unwrap();
 
-        assert_eq!(g, f);
+        let graph_from_str = DirectedAcyclicGraph::from_str(&format!("{}", graph)).unwrap();
+        let graph_from_bytes = unsafe { DirectedAcyclicGraph::from_bytes(graph.as_bytes()) };
+
+        assert_eq!(graph, graph_from_str);
+        assert_eq!(graph, *graph_from_bytes);
+    }
+
+    #[test]
+    fn dag_method_get_executable_node_indeces() {
+        let graph = DirectedAcyclicGraph::new(
+            vec![
+                Node::new(String::from("Node 0 was just executed")),
+                Node::new(String::from("Node 1 was just executed")),
+                Node::new(String::from("Node 2 was just executed")),
+                Node::new(String::from("Node 3 was just executed")),
+            ],
+            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
+        )
+        .unwrap();
+
+        let executable_nodes_1 = graph.get_executable_node_indeces();
+        let executable_nodes_2 = VecDeque::from(vec![NodeIndex::new(0), NodeIndex::new(2)]);
+
+        assert_eq!(executable_nodes_1, executable_nodes_2);
+    }
+
+    #[test]
+    fn dag_method_execute_nodes() {
+        let mut graph = DirectedAcyclicGraph::new(
+            vec![
+                Node::new(String::from("Node 0 was just executed")),
+                Node::new(String::from("Node 1 was just executed")),
+                Node::new(String::from("Node 2 was just executed")),
+                Node::new(String::from("Node 3 was just executed")),
+            ],
+            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
+        )
+        .unwrap();
+
+        graph.execute_nodes().unwrap();
+
+        assert_eq!(graph[NodeIndex::new(0)].execution_status, ExecutionStatus::Executed);
+        assert_eq!(graph[NodeIndex::new(1)].execution_status, ExecutionStatus::Executed);
+        assert_eq!(graph[NodeIndex::new(2)].execution_status, ExecutionStatus::Executed);
+        assert_eq!(graph[NodeIndex::new(3)].execution_status, ExecutionStatus::Executed);
     }
 }
