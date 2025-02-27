@@ -13,11 +13,7 @@ pub struct DirectedAcyclicGraph {
 
 impl fmt::Display for DirectedAcyclicGraph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Struct DirectedAcyclicGraph,\n{}",
-            dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel])
-        )
+        write!(f, "{}", dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel]))
     }
 }
 
@@ -65,6 +61,25 @@ impl Index<NodeIndex> for DirectedAcyclicGraph {
 impl IndexMut<NodeIndex> for DirectedAcyclicGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.graph[index]
+    }
+}
+
+impl PartialEq for DirectedAcyclicGraph {
+    fn eq(&self, other: &Self) -> bool {
+        if self.graph.node_indices().count() != other.graph.node_indices().count() || self.graph.edge_indices().count() != other.graph.edge_indices().count() {
+            return false;
+        }
+        for n in self.graph.node_indices() {
+            if self[n] != other[n] {
+                return false;
+            }
+        }
+        for e in self.graph.edge_indices() {
+            if self.graph.edge_endpoints(e).unwrap() != other.graph.edge_endpoints(e).unwrap() {
+                return false;
+            }
+        }
+        true
     }
 }
 

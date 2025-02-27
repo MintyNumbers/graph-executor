@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Error, Result};
 use std::{fmt, str::FromStr};
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum ExecutionStatus {
     Executed,
     Executing,
@@ -30,8 +30,8 @@ impl FromStr for ExecutionStatus {
     ///
     /// The following two `ExecutionStatus` are identical:
     /// ```
-    /// let execution_status_from_string = ExecutionStatus::from_str("Executed");
-    /// let execution_status_instantiated = ExecutionStatus::Executed;
+    /// let execution_status_from_str = ExecutionStatus::from_str("Executed").unwrap();
+    /// let execution_status_direct = ExecutionStatus::Executed;
     /// ```
     fn from_str(execution_status_string: &str) -> Result<Self> {
         match execution_status_string {

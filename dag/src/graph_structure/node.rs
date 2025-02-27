@@ -2,7 +2,7 @@ use super::execution_status::ExecutionStatus;
 use anyhow::{anyhow, Error, Result};
 use std::{fmt, str::FromStr};
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Node {
     // computation: fn(&str) -> anyhow::Result<&str>,
     args: String,
@@ -49,8 +49,8 @@ impl FromStr for Node {
     ///
     /// The following two `Node`s are identical:
     /// ```
-    /// let node_from_string = Node::from_str("Struct Node, Node.args: "", Node.executed: false");
-    /// let node_instantiated = Node::new(String::from(""), false);
+    /// let node_from_str = Node::from_str("Struct Node, Node.args: , Node.executed: Executable").unwrap();
+    /// let node_new = Node::new(String::from(""));
     /// ```
     fn from_str(node_string: &str) -> Result<Self> {
         let mut node = Node {
