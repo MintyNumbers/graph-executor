@@ -1,13 +1,20 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Error, Ok, Result};
 use core::{mem::size_of, slice::from_raw_parts};
 use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, Direction};
-use std::{collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut, str::FromStr};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt,
+    fs::write,
+    ops::{Index, IndexMut},
+    str::FromStr,
+    sync::{Arc, Condvar, Mutex, RwLock},
+    thread,
+};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[repr(C)] // Guarantee stable layout across executions
 pub struct DirectedAcyclicGraph {
-    // graph: Arc<Mutex<StableDiGraph<Node, i32>>>,
     graph: StableDiGraph<Node, i32>,
 }
 
@@ -25,24 +32,33 @@ impl FromStr for DirectedAcyclicGraph {
     /// let graph = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
     /// ```
     fn from_str(dag_string: &str) -> Result<Self> {
-        let mut nodes: Vec<Node> = vec![];
+        let mut nodes: Vec<(usize, Node)> = vec![];
         let mut edges: Vec<Edge> = vec![];
 
         if dag_string.trim().starts_with("digraph") {
-            // let (nodes, edges): (Vec<Node>, Vec<Edge>);
             for line in dag_string.trim().split("\n") {
-                match line {
-                    l if line.trim().as_bytes()[0].is_ascii_digit() && line.trim()[1..].starts_with(" [") => {
-                        let a: Vec<&str> = l.split('\"').collect();
-                        nodes.push(Node::from_str(
-                            *a.get(1).ok_or(anyhow!("DirectedAcyclicGraph::from_str parsing error: No node label."))?,
-                        )?);
-                    }
-                    l if line.trim().as_bytes()[0].is_ascii_digit() && line.trim().as_bytes()[5].is_ascii_digit() => {
-                        edges.push(Edge::from_str(l.trim())?);
-                    }
-                    // _ if line.trim().starts_with(&['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) => println!("starts_with"),
-                    _ => {}
+                let split_line = line.trim().split(" ").collect::<Vec<&str>>();
+
+                // If a line looks like "0 [ label = "Node 0" ]" parse it as a `Node`.
+                if split_line[0].trim().chars().all(|c| c.is_ascii_digit()) && split_line[1].trim() == "[" {
+                    nodes.push((
+                        split_line[0].trim().parse::<usize>()?,
+                        Node::from_str(
+                            *line
+                                .split('\"')
+                                .collect::<Vec<&str>>()
+                                .get(1)
+                                .ok_or(anyhow!("DirectedAcyclicGraph::from_str parsing error: No node label."))?,
+                        )?,
+                    ));
+                }
+                // If a line looks like "0 -> 1 [ ]" parse it as an `Edge`.
+                else if split_line[0].trim().chars().all(|c| c.is_ascii_digit())
+                    && split_line[1].trim() == "->"
+                    && split_line[2].trim().chars().all(|c| c.is_ascii_digit())
+                    && split_line[3].trim() == "["
+                {
+                    edges.push(Edge::new((split_line[0].trim().parse::<usize>()?, split_line[2].trim().parse::<usize>()?)));
                 }
             }
         }
@@ -93,22 +109,22 @@ impl DirectedAcyclicGraph {
     ///     vec![Edge::new((0, 1)), Edge::new((1, 2)), Edge::new((2, 3)), Edge::new((1, 3))],
     /// )?;
     /// ```
-    pub fn new(nodes: Vec<Node>, edges: Vec<Edge>) -> Result<Self> {
+    pub fn new(nodes: Vec<(usize, Node)>, edges: Vec<Edge>) -> Result<Self> {
         let mut graph = StableDiGraph::<Node, i32>::new();
+        let mut node_indeces = HashMap::new();
 
         // Populate graph with nodes.
-        let mut node_indeces: Vec<NodeIndex> = vec![];
-        nodes.into_iter().for_each(|n| {
-            node_indeces.push(graph.add_node(n));
+        nodes.into_iter().for_each(|(i, node)| {
+            node_indeces.insert(i, graph.add_node(node));
         });
 
         // Populate graph with all edges between nodes.
         edges.into_iter().for_each(|edge| {
             if edge.nodes.0 < node_indeces.len() && edge.nodes.1 < node_indeces.len() {
-                graph.add_edge(node_indeces[edge.nodes.0], node_indeces[edge.nodes.1], 1 /* edge.weight */);
+                graph.add_edge(node_indeces[&edge.nodes.0], node_indeces[&edge.nodes.1], 1);
 
                 // Set `ExecutionStatus` of `edge.nodes.1` to `NonExecutable`.
-                graph[node_indeces[edge.nodes.1]].execution_status = ExecutionStatus::NonExecutable;
+                graph[node_indeces[&edge.nodes.1]].execution_status = ExecutionStatus::NonExecutable;
             }
         });
 
@@ -141,79 +157,6 @@ impl DirectedAcyclicGraph {
         Ok(())
     }
 
-    /// Execute all `Node`s.
-    pub fn execute_nodes(&mut self) -> Result<()> {
-        let mut executable_nodes = self.get_executable_node_indeces();
-
-        // let mut i = 0;
-        while executable_nodes.len() > 0 {
-            // println!("\n\n\nloop {}: {}", i, self);
-            // i += 1;
-
-            let node_index = executable_nodes
-                .pop_front()
-                .ok_or(anyhow!("No executable nodes found despite successful check."))?;
-
-            // Execute first node in queue.
-            self.graph[node_index].execute()?;
-
-            // Update `execution_status` of next `Node`s to executable if all their parent nodes have been executed.
-            let next_indices: Vec<NodeIndex> = self.graph.neighbors_directed(node_index, Direction::Outgoing).collect(); // Nodes that may be executable after executing `node_index`.
-            next_indices.into_iter().for_each(|next_index| {
-                // Nodes that need to be executed prior to executing `next_index`.
-                let parent_indeces: Vec<NodeIndex> = self.graph.neighbors_directed(next_index, Direction::Incoming).collect();
-                for parent_index in parent_indeces {
-                    // If one parent node has not been executed, break.
-                    if self.graph[parent_index].execution_status != ExecutionStatus::Executed {
-                        self.graph[next_index].execution_status = ExecutionStatus::NonExecutable;
-                        break;
-                    }
-                    self.graph[next_index].execution_status = ExecutionStatus::Executable;
-                }
-
-                // Add `next_index` to `executable_nodes` if all parent nodes have been executed.
-                if self.graph[next_index].execution_status == ExecutionStatus::Executable {
-                    executable_nodes.push_back(next_index);
-                }
-            });
-        }
-
-        // // TODO: Implement parallel node execution.
-
-        // // Get executable (parent) nodes.
-        // let mut executable_nodes = self.get_executable_node_indeces();
-
-        // // Get number of threads.
-        // let num_threads = if num_cpus::get() > executable_nodes.len() {
-        //     executable_nodes.len() // If more cores than executable nodes, spawn a thread for each executable node.
-        // } else {
-        //     num_cpus::get() // If more executable nodes than cores, spawn a thread for each core.
-        // };
-
-        // // Spawn threads.
-        // let mut threads = Vec::with_capacity(num_threads);
-        // for _ in 0..num_threads {
-        //     let _i = executable_nodes.pop_front().ok_or(anyhow!("No executable nodes found."))?;
-        //     threads.push(thread::spawn(move || -> Result<()> {
-        //        println!("{:?}", i);
-        //        &self.graph[_i].execute()?;
-        //
-        //        Update children's status to executable if all their parent nodes have been executed.
-        //        &self.graph.neighbors_directed(_i, Direction::Incoming).filter_map(|_| None::<()>);
-        //
-        //         std::thread::sleep(std::time::Duration::from_secs(1));
-        //         Ok(())
-        //     }));
-        // }
-
-        // // Wait for threads to exit.
-        // for t in threads.drain(..) {
-        //     let _ = t.join().map_err(|e| anyhow!("Unable to join thread: {:?}", e))?;
-        // }
-
-        Ok(())
-    }
-
     /// Get all executable `Node` indeces.
     pub fn get_executable_node_indeces(&self) -> VecDeque<NodeIndex> {
         self.graph
@@ -226,5 +169,114 @@ impl DirectedAcyclicGraph {
                 }
             })
             .collect()
+    }
+
+    /// Get an executable `Node` index.
+    pub fn get_executable_node_index(&self) -> Option<NodeIndex> {
+        self.graph
+            .node_indices()
+            .find(|i| self.graph[*i].execution_status == ExecutionStatus::Executable)
+    }
+
+    pub fn is_graph_executed(&self) -> bool {
+        self.graph
+            .node_weights()
+            .filter_map(|n| if n.execution_status == ExecutionStatus::Executed { None } else { Some(n) })
+            .collect::<Vec<&Node>>()
+            .is_empty()
+    }
+
+    /// Execute all `Node`s.
+    pub fn execute_nodes(&mut self) -> Result<()> {
+        // Get number of threads. If more cores than executable nodes, spawn a thread for each executable node, else spawn a thread for each core.
+        let (num_cpu_cores, _num_init_executable_nodes) = (num_cpus::get(), self.get_executable_node_indeces().len());
+        let _num_threads = if num_cpu_cores > _num_init_executable_nodes {
+            _num_init_executable_nodes
+        } else {
+            num_cpu_cores
+        };
+
+        // Create Mutex for `self` and all executable `Node`s to share execution data between threads.
+        let executable_nodes_mutex = Arc::new(Mutex::new(self.get_executable_node_indeces()));
+        let notify_thread_condvar = Condvar::new(); // For notifying about new executable nodes or finished graph execution.
+        let self_lock = Arc::new(RwLock::new(self));
+
+        // Spawn threads.
+        thread::scope(|s| -> Result<()> {
+            // TODO: create mechanism which:
+            //   (1) On program start only spawns as many threads as necessary (as many as there are initally executable nodes).
+            //   (2) Spawns more threads when there are more executable nodes than active threads, but only ever as many as there are cores.
+            //   (3) Puts surplus threads to sleep using a Condition Variable when there are more active threads than executable nodes.
+            // Currently: Spawns a thread for each CPU core and execute nodes.
+            for _ in 0..num_cpu_cores {
+                s.spawn(|| -> Result<()> {
+                    loop {
+                        // Get an executable node and go to sleep if there are none.
+                        let mut executable_nodes = executable_nodes_mutex.lock().unwrap();
+                        let node_index = loop {
+                            if let Some(i) = executable_nodes.pop_front() {
+                                break i;
+                            } else {
+                                // Don't enter block if the graph is already executed (no notifiers are left).
+                                if self_lock.read().unwrap().is_graph_executed() == false {
+                                    // Can potentially wait for a long time.
+                                    executable_nodes = notify_thread_condvar.wait(executable_nodes).unwrap();
+                                }
+                                // Break loop (ending thread) when the whole graph has been executed.
+                                if self_lock.read().unwrap().is_graph_executed() == true {
+                                    return Ok(());
+                                }
+                            }
+                        };
+                        drop(executable_nodes);
+
+                        // Set execution status for `node_index` to `ExecutionStatus::Executing` for an executable node.
+                        self_lock.write().unwrap().graph[node_index].execution_status = ExecutionStatus::Executing;
+                        println!("{:?}: Set execution status to executing.", node_index);
+
+                        // Execute the thread's `Node`.
+                        println!("{:?}: Executing node...", node_index);
+                        self_lock.read().unwrap().graph[node_index].execute()?;
+
+                        // Set execution_status for `node_index` to `ExecutionStatus::Executed`.
+                        self_lock.write().unwrap().graph[node_index].execution_status = ExecutionStatus::Executed;
+                        println!("{:?}: Set execution status to executed.", node_index);
+
+                        // Get indeces of nodes that are now executable (due to all their parent nodes having been executed).
+                        let self_data = self_lock.read().unwrap();
+                        let new_executable_nodes: Vec<(NodeIndex, ExecutionStatus)> = self_data
+                            .graph
+                            .neighbors_directed(node_index, Direction::Outgoing)
+                            .filter_map(|next_index| {
+                                // Nodes that need to be executed prior to executing `next_index` (parent nodes).
+                                for parent_index in self_data.graph.neighbors_directed(next_index, Direction::Incoming).collect::<Vec<NodeIndex>>() {
+                                    // If one parent node has not been executed, break loop because child is not executable.
+                                    if self_data.graph[parent_index].execution_status != ExecutionStatus::Executed {
+                                        return None;
+                                    }
+                                }
+                                return Some((next_index, ExecutionStatus::Executable));
+                            })
+                            .collect();
+                        drop(self_data);
+
+                        // Notify all threads if graph was executed.
+                        if self_lock.read().unwrap().is_graph_executed() == true {
+                            notify_thread_condvar.notify_all();
+                        }
+
+                        // Notify a thread for each new executable node.
+                        new_executable_nodes.iter().for_each(|(i, _)| {
+                            executable_nodes_mutex.lock().unwrap().push_back(*i);
+                            notify_thread_condvar.notify_one();
+                        });
+                    }
+                });
+            }
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 }

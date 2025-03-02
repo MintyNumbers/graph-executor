@@ -8,7 +8,7 @@ mod tests {
     use petgraph::graph::NodeIndex;
 
     use super::{edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node};
-    use std::{collections::VecDeque, str::FromStr, vec};
+    use std::{collections::VecDeque, str::FromStr};
 
     // `Edge` tests
 
@@ -42,7 +42,7 @@ mod tests {
         node_executed.execution_status = ExecutionStatus::Executed;
         let mut node_executing = Node::new(String::from(""));
         node_executing.execution_status = ExecutionStatus::Executing;
-        let mut node_executable = Node::new(String::from(""));
+        let node_executable = Node::new(String::from(""));
         let mut node_non_executable = Node::new(String::from(""));
         node_non_executable.execution_status = ExecutionStatus::NonExecutable;
 
@@ -55,12 +55,11 @@ mod tests {
             result_executed.unwrap_err().to_string(),
             String::from("Trying to execute node which has already been executed.")
         );
+        assert_eq!(result_executing.unwrap(), ());
         assert_eq!(
-            result_executing.unwrap_err().to_string(),
-            String::from("Trying to execute node which is currently being executed.")
+            result_executable.unwrap_err().to_string(),
+            String::from("Trying to execute node which is not yet set for execution.")
         );
-        assert_eq!(node_executable.execution_status, ExecutionStatus::Executed);
-        assert_eq!(result_executable.unwrap(), ());
         assert_eq!(
             result_non_executable.unwrap_err().to_string(),
             String::from("Trying to execute node which is not executable.")
@@ -83,10 +82,10 @@ mod tests {
     fn dag_compare_equality_new_from_str_from_bytes() {
         let graph = DirectedAcyclicGraph::new(
             vec![
-                Node::new(String::from("Node 0 was just executed")),
-                Node::new(String::from("Node 1 was just executed")),
-                Node::new(String::from("Node 2 was just executed")),
-                Node::new(String::from("Node 3 was just executed")),
+                (0, Node::new(String::from("Node 0 was just executed"))),
+                (1, Node::new(String::from("Node 1 was just executed"))),
+                (2, Node::new(String::from("Node 2 was just executed"))),
+                (3, Node::new(String::from("Node 3 was just executed"))),
             ],
             vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
@@ -103,10 +102,10 @@ mod tests {
     fn dag_method_get_executable_node_indeces() {
         let graph = DirectedAcyclicGraph::new(
             vec![
-                Node::new(String::from("Node 0 was just executed")),
-                Node::new(String::from("Node 1 was just executed")),
-                Node::new(String::from("Node 2 was just executed")),
-                Node::new(String::from("Node 3 was just executed")),
+                (0, Node::new(String::from("Node 0 was just executed"))),
+                (1, Node::new(String::from("Node 1 was just executed"))),
+                (2, Node::new(String::from("Node 2 was just executed"))),
+                (3, Node::new(String::from("Node 3 was just executed"))),
             ],
             vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
@@ -122,10 +121,10 @@ mod tests {
     fn dag_method_execute_nodes() {
         let mut graph = DirectedAcyclicGraph::new(
             vec![
-                Node::new(String::from("Node 0 was just executed")),
-                Node::new(String::from("Node 1 was just executed")),
-                Node::new(String::from("Node 2 was just executed")),
-                Node::new(String::from("Node 3 was just executed")),
+                (0, Node::new(String::from("Node 0 was just executed"))),
+                (1, Node::new(String::from("Node 1 was just executed"))),
+                (2, Node::new(String::from("Node 2 was just executed"))),
+                (3, Node::new(String::from("Node 3 was just executed"))),
             ],
             vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
@@ -133,9 +132,6 @@ mod tests {
 
         graph.execute_nodes().unwrap();
 
-        assert_eq!(graph[NodeIndex::new(0)].execution_status, ExecutionStatus::Executed);
-        assert_eq!(graph[NodeIndex::new(1)].execution_status, ExecutionStatus::Executed);
-        assert_eq!(graph[NodeIndex::new(2)].execution_status, ExecutionStatus::Executed);
-        assert_eq!(graph[NodeIndex::new(3)].execution_status, ExecutionStatus::Executed);
+        assert_eq!(graph.is_graph_executed(), true);
     }
 }

@@ -10,10 +10,10 @@ fn main() -> anyhow::Result<()> {
     // Create new `DirectedAcyclicGraph`.
     let g = DirectedAcyclicGraph::new(
         vec![
-            Node::new(String::from("Node 0 was just executed")),
-            Node::new(String::from("Node 1 was just executed")),
-            Node::new(String::from("Node 2 was just executed")),
-            Node::new(String::from("Node 3 was just executed")),
+            (0, Node::new(String::from("-- Node 0 was just executed --"))),
+            (1, Node::new(String::from("-- Node 1 was just executed --"))),
+            (2, Node::new(String::from("-- Node 2 was just executed --"))),
+            (3, Node::new(String::from("-- Node 3 was just executed --"))),
         ],
         vec![Edge::new((0, 1)), /* Edge::new((1, 2)), */ Edge::new((2, 3)), Edge::new((1, 3))],
     )?;
@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
     let f = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
 
     // Create shared memory mapping with `DirectedAcyclicGraph`.
-    let mut shm_mapping = ShmMapping::new(String::from("shared_mem_mapping"), f)?;
+    let mut shm_mapping = ShmMapping::new(String::from("shared_mem_mapping"), f, false)?;
 
     // Execute graph.
     shm_mapping.execute_graph()?;
