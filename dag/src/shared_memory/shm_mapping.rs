@@ -1,39 +1,47 @@
-use crate::graph_structure::graph::DirectedAcyclicGraph;
+use super::as_from_bytes::AsFromBytes;
 use anyhow::{anyhow, Result};
 use raw_sync::locks::LockInit;
 use shared_memory::ShmemConf;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::{fmt::Display, sync::atomic::AtomicU8, sync::atomic::Ordering};
 
-#[derive(Clone, Debug)]
-pub struct ShmMapping {
+#[derive(Debug)]
+pub struct ShmMapping<T>
+where
+    T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
+{
     shmem_flink: String,
-    buf_len: usize,
-    graph: DirectedAcyclicGraph,
-    serialize: bool,
+    pub buf_len: usize,
+    pub wrapped: T,
+    pub serialize: bool,
 }
 
-impl ShmMapping {
-    /// Creates a new shared memory mapping, writes graph to it, initializes `Mutex` and returns `ShmMapping`.
-    pub fn new(shmem_flink: String, graph: DirectedAcyclicGraph, serialize: bool) -> Result<Self> {
+impl<T> ShmMapping<T>
+where
+    T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
+{
+    /// Creates a new shared memory mapping, writes `wrapped` to it, initializes `Mutex` and returns `ShmMapping`.
+    pub fn new(shmem_flink: String, wrapped: T, serialize: bool) -> Result<Self> {
         // Construct `ShmMapping`.
         let shm_mapping = ShmMapping {
             shmem_flink: shmem_flink,
             buf_len: if serialize {
-                rmp_serde::to_vec(&graph)?.len()
+                rmp_serde::to_vec(&wrapped)?.len()
             } else {
-                unsafe { graph.as_bytes().len() }
+                wrapped.as_bytes().len()
             },
-            graph: graph,
+            wrapped: wrapped,
             serialize: serialize,
         };
 
-        // Create shared memory mapping.
-        let _ = std::fs::remove_file(&shm_mapping.shmem_flink);
-        let shmem = ShmemConf::new()
-            .size(shm_mapping.buf_len)
-            .flink(&shm_mapping.shmem_flink)
-            .create()
-            .map_err(|e| anyhow!("Unable to create new shared memory section {}: {}", &shm_mapping.shmem_flink, e))?;
+        // Create or open the shared memory mapping
+        // let _ = std::fs::remove_file(&shm_mapping.shmem_flink);
+        let shmem = match ShmemConf::new().size(shm_mapping.buf_len).flink(&shm_mapping.shmem_flink).create() {
+            Ok(m) => m,
+            Err(shared_memory::ShmemError::LinkExists) => ShmemConf::new().flink(&shm_mapping.shmem_flink).open()?,
+            Err(e) => {
+                return Err(anyhow!("Unable to create new shared memory section {}: {}", &shm_mapping.shmem_flink, e));
+            }
+        };
 
         // Initialize `raw_ptr`.
         let mut raw_ptr: *mut u8 = shmem.as_ptr();
@@ -54,44 +62,28 @@ impl ShmMapping {
         };
         is_init.store(1, Ordering::Relaxed);
 
-        // Write graph to shared memory mapping.
-        shm_mapping.write_graph_from_struct_to_memory(is_init, raw_ptr)?;
+        // Write `wrapped` to shared memory mapping.
+        shm_mapping.write_to_shared_memory(is_init, raw_ptr)?;
 
         // Return `ShmMapping`.
         Ok(shm_mapping)
     }
 
-    /// Update `self.graph` and the graph stored in the shared memory mapping with supplied `graph`.
-    pub fn update_graph(&mut self, graph: DirectedAcyclicGraph) -> Result<()> {
-        // Update `graph` field in `ShmMemory` strct.
-        self.graph = graph;
+    /// Update `self.wrapped` field and the wrapped struct stored in the shared memory mapping with
+    /// supplied by the `wrapped` argument.
+    pub fn overwrite_shared_memory_data(&mut self, wrapped: T) -> Result<()> {
+        // Update `wrapped` field in struct.
+        self.wrapped = wrapped;
 
-        // Update graph in shared memory mapping.
-        let (is_init, raw_ptr) = self.open_shm_mapping()?;
-        self.write_graph_from_struct_to_memory(is_init, raw_ptr)?;
+        // Update `wrapped` in shared memory mapping.
+        let (is_init, raw_ptr) = self.open_shared_memory()?;
+        self.write_to_shared_memory(is_init, raw_ptr)?;
 
         Ok(())
     }
 
-    // /// Update node execution status of graph stored in shared memory.
-    // pub fn update_node_execution_status(&mut self, node: NodeIndex, execution_status: ExecutionStatus) -> Result<()> {
-    //     // Update `graph` field in `ShmMemory` strct.
-    //     self.graph[node].execution_status = execution_status;
-
-    //     // Update graph in shared memory mapping.
-    //     let (is_init, raw_ptr) = self.open_shm_mapping()?;
-    //     self.write_graph_from_struct_to_memory(is_init, raw_ptr)?;
-
-    //     Ok(())
-    // }
-
-    pub fn execute_graph(&mut self) -> Result<()> {
-        self.graph.execute_nodes()?;
-        Ok(())
-    }
-
-    /// Open shared memory mapping.
-    fn open_shm_mapping(&self) -> Result<(&mut AtomicU8, *mut u8)> {
+    /// Open shared memory mapping and return `is_init` and `raw_ptr`.
+    fn open_shared_memory(&self) -> Result<(&mut AtomicU8, *mut u8)> {
         let shmem = ShmemConf::new()
             .flink(&self.shmem_flink)
             .open()
@@ -107,7 +99,7 @@ impl ShmMapping {
         Ok((is_init, raw_ptr))
     }
 
-    fn get_mutex(is_init: &mut AtomicU8, raw_ptr: *mut u8) -> Result<Box<dyn raw_sync::locks::LockImpl>> {
+    pub fn get_mutex(is_init: &mut AtomicU8, raw_ptr: *mut u8) -> Result<Box<dyn raw_sync::locks::LockImpl>> {
         // Wait for initialized mutex.
         while is_init.load(Ordering::Relaxed) != 1 {
             println!("This shouldn't happen?");
@@ -125,10 +117,10 @@ impl ShmMapping {
         Ok(mutex)
     }
 
-    /// Write graph bytes to shared memory.
-    fn write_graph_from_struct_to_memory(&self, is_init: &mut AtomicU8, mut raw_ptr: *mut u8) -> Result<()> {
+    /// Write `wrapped` struct bytes to shared memory.
+    fn write_to_shared_memory(&self, is_init: &mut AtomicU8, mut raw_ptr: *mut u8) -> Result<()> {
         // Acquire lock over guarded data.
-        let mutex = ShmMapping::get_mutex(is_init, raw_ptr)?;
+        let mutex = ShmMapping::<T>::get_mutex(is_init, raw_ptr)?;
         let guard = mutex.lock().map_err(|e| anyhow!("Error acquiring Mutex lock: {}", e))?;
         // let val: &mut u8 = unsafe { &mut **guard };
 
@@ -136,15 +128,16 @@ impl ShmMapping {
         unsafe {
             raw_ptr = raw_ptr.add(raw_sync::locks::Mutex::size_of(Some(raw_ptr))); // Move pointer to data address.
 
-            // Serialize graph or cast graph as bytes.
-            let graph_bytes: Vec<u8> = if self.serialize {
-                rmp_serde::to_vec(&self.graph)?
+            // Serialize wrapped struct or cast wrapped struct as bytes.
+            let wrapped_bytes: Vec<u8> = if self.serialize {
+                // rmp_serde::to_vec(&self.wrapped)?
+                self.wrapped.as_bytes().to_vec()
             } else {
-                self.graph.as_bytes().to_vec()
+                self.wrapped.as_bytes().to_vec()
             };
 
-            for byte in graph_bytes {
-                raw_ptr.write(byte); // Write graph byte to memory.
+            for byte in wrapped_bytes {
+                raw_ptr.write(byte); // Write wrapped struct byte to memory.
                 raw_ptr = raw_ptr.add(1); // Move pointer forward by the size of a byte.
             }
         }
@@ -152,30 +145,6 @@ impl ShmMapping {
         // Release lock over guarded data.
         drop(guard);
 
-        Ok(())
-    }
-
-    /// Read graph bytes from shared memory.
-    pub fn read_graph_from_memory_to_struct(&mut self, is_init: &mut AtomicU8, mut raw_ptr: *mut u8) -> Result<()> {
-        // Acquire lock over guarded data.
-        let mutex = ShmMapping::get_mutex(is_init, raw_ptr)?;
-        let guard = mutex.lock().map_err(|e| anyhow!("Error acquiring Mutex lock: {}", e))?;
-        // let val: &mut u8 = unsafe { &mut **guard };
-
-        // Read from shared memory mapping.
-        let mut graph_bytes: Vec<u8> = vec![];
-        unsafe {
-            for _ in 0..self.buf_len {
-                graph_bytes.push(raw_ptr.read());
-                raw_ptr = raw_ptr.add(1);
-            }
-        }
-
-        // Release lock over guarded data.
-        drop(guard);
-
-        let graph: DirectedAcyclicGraph = rmp_serde::from_slice(&graph_bytes)?;
-        self.graph = graph;
         Ok(())
     }
 }

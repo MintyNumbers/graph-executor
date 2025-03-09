@@ -5,9 +5,9 @@ pub mod node;
 
 #[cfg(test)]
 mod tests {
-    use petgraph::graph::NodeIndex;
-
     use super::{edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node};
+    use crate::shared_memory::as_from_bytes::AsFromBytes;
+    use petgraph::graph::NodeIndex;
     use std::{collections::VecDeque, str::FromStr};
 
     // `Edge` tests
@@ -18,9 +18,15 @@ mod tests {
         let edge_direct = Edge { nodes: (0, 1) };
         let edge_new = Edge::new((0, 1));
 
-        assert_eq!(edge_from_str, edge_direct);
-        assert_eq!(edge_from_str, edge_new);
-        assert_eq!(edge_direct, edge_new);
+        assert_eq!(
+            edge_from_str, edge_direct,
+            "`Edge::from_string()` and `Edge {{}}` initializations are not equal."
+        );
+        assert_eq!(
+            edge_from_str, edge_new,
+            "`Edge::from_string()` and `Edge::new()` initializations are not equal."
+        );
+        assert_eq!(edge_direct, edge_new, "`Edge {{}}` and `Edge::new()` initializations are not equal.");
     }
 
     // `Node` tests
@@ -31,9 +37,15 @@ mod tests {
         let node_new = Node::new(String::from(""));
         let node_default = Node::default();
 
-        assert_eq!(node_from_str, node_new);
-        assert_eq!(node_from_str, node_default);
-        assert_eq!(node_new, node_default);
+        assert_eq!(
+            node_from_str, node_new,
+            "`Node::from_string()` and `Node::new()` initializations are not equal."
+        );
+        assert_eq!(
+            node_from_str, node_default,
+            "`Node::from_string()` and `Node::default()` initializations are not equal."
+        );
+        assert_eq!(node_new, node_default, "`Node::new()` and `Node::default()` initializations are not equal.");
     }
 
     #[test]
@@ -53,16 +65,23 @@ mod tests {
 
         assert_eq!(
             result_executed.unwrap_err().to_string(),
-            String::from("Trying to execute node which has already been executed.")
+            String::from("Trying to execute node which has already been executed."),
+            "Wrong/no error when trying to execute node which has `ExecutionStatus::Executed`."
         );
-        assert_eq!(result_executing.unwrap(), ());
+        assert_eq!(
+            result_executing.unwrap(),
+            (),
+            "Unsuccessful when trying to execute node which has `ExecutionStatus::Executing`."
+        );
         assert_eq!(
             result_executable.unwrap_err().to_string(),
-            String::from("Trying to execute node which is not yet set for execution.")
+            String::from("Trying to execute node which is not yet set for execution."),
+            "Wrong/no error when trying to execute node which has `ExecutionStatus::Executable`."
         );
         assert_eq!(
             result_non_executable.unwrap_err().to_string(),
-            String::from("Trying to execute node which is not executable.")
+            String::from("Trying to execute node which is not executable."),
+            "Wrong/no error when trying to execute node which has `ExecutionStatus::NonExecutable`."
         );
     }
 
@@ -73,14 +92,17 @@ mod tests {
         let execution_status_from_str = ExecutionStatus::from_str("Executed").unwrap();
         let execution_status_direct = ExecutionStatus::Executed;
 
-        assert_eq!(execution_status_from_str, execution_status_direct);
+        assert_eq!(
+            execution_status_from_str, execution_status_direct,
+            "`ExecutionStatus::from_string()` and `ExecutionStatus::Executed` initializations are not equal."
+        );
     }
 
     // `DirectedAcyclicGraph` tests
 
     #[test]
     fn dag_compare_equality_new_from_str_from_bytes() {
-        let graph = DirectedAcyclicGraph::new(
+        let graph_new = DirectedAcyclicGraph::new(
             vec![
                 (0, Node::new(String::from("Node 0 was just executed"))),
                 (1, Node::new(String::from("Node 1 was just executed"))),
@@ -91,11 +113,18 @@ mod tests {
         )
         .unwrap();
 
-        let graph_from_str = DirectedAcyclicGraph::from_str(&format!("{}", graph)).unwrap();
-        let graph_from_bytes = unsafe { DirectedAcyclicGraph::from_bytes(graph.as_bytes()) };
+        let graph_from_str = DirectedAcyclicGraph::from_str(&format!("{}", graph_new)).unwrap();
+        let graph_from_bytes = DirectedAcyclicGraph::from_bytes(graph_new.as_bytes());
 
-        assert_eq!(graph, graph_from_str);
-        assert_eq!(graph, *graph_from_bytes);
+        assert_eq!(graph_new, graph_from_str, "`DAG::new()` and `DAG::from_str()` initializations are not equal.");
+        assert_eq!(
+            graph_new, graph_from_bytes,
+            "`DAG::new()` and `DAG::from_bytes()` initializations are not equal."
+        );
+        assert_eq!(
+            graph_from_str, graph_from_bytes,
+            "`DAG::from_str()` and `DAG::from_bytes()` initializations are not equal."
+        );
     }
 
     #[test]
@@ -114,7 +143,10 @@ mod tests {
         let executable_nodes_1 = graph.get_executable_node_indeces();
         let executable_nodes_2 = VecDeque::from(vec![NodeIndex::new(0), NodeIndex::new(2)]);
 
-        assert_eq!(executable_nodes_1, executable_nodes_2);
+        assert_eq!(
+            executable_nodes_1, executable_nodes_2,
+            "`DAG.get_executable_node_indeces()` method does not return correct node indeces."
+        );
     }
 
     #[test]
@@ -132,6 +164,6 @@ mod tests {
 
         graph.execute_nodes().unwrap();
 
-        assert_eq!(graph.is_graph_executed(), true);
+        assert_eq!(graph.is_graph_executed(), true, "`DAG.execute_nodes()` method does not execute all `Node`s.");
     }
 }

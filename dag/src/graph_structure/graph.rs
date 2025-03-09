@@ -1,6 +1,6 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
+use crate::shared_memory::as_from_bytes::AsFromBytes;
 use anyhow::{anyhow, Error, Ok, Result};
-use core::{mem::size_of, slice::from_raw_parts};
 use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, Direction};
 use std::{
     collections::{HashMap, VecDeque},
@@ -66,6 +66,8 @@ impl FromStr for DirectedAcyclicGraph {
         DirectedAcyclicGraph::new(nodes, edges)
     }
 }
+
+impl AsFromBytes for DirectedAcyclicGraph {}
 
 impl Index<NodeIndex> for DirectedAcyclicGraph {
     type Output = Node;
@@ -133,16 +135,6 @@ impl DirectedAcyclicGraph {
         Ok(DirectedAcyclicGraph { graph: graph })
     }
 
-    /// Casts `DirectedAcyclicGraph` as its byte representation.
-    pub unsafe fn as_bytes(&self) -> &[u8] {
-        from_raw_parts((self as *const DirectedAcyclicGraph) as *const u8, size_of::<DirectedAcyclicGraph>())
-    }
-
-    /// Casts byte representation as `DirectedAcyclicGraph`.
-    pub unsafe fn from_bytes(bytes: &[u8]) -> &Self {
-        &*(bytes.as_ptr() as *const DirectedAcyclicGraph)
-    }
-
     /// Write `DirectedAcyclicGraph` to `path`.
     ///
     /// ```
@@ -201,6 +193,9 @@ impl DirectedAcyclicGraph {
         let notify_thread_condvar = Condvar::new(); // For notifying about new executable nodes or finished graph execution.
         let self_lock = Arc::new(RwLock::new(self));
 
+        // Handle to main thread to park during node execution.
+        let main_thread = thread::current();
+
         // Spawn threads.
         thread::scope(|s| -> Result<()> {
             // TODO: create mechanism which:
@@ -222,8 +217,9 @@ impl DirectedAcyclicGraph {
                                     // Can potentially wait for a long time.
                                     executable_nodes = notify_thread_condvar.wait(executable_nodes).unwrap();
                                 }
-                                // Break loop (ending thread) when the whole graph has been executed.
+                                // Break loop (ending thread) when the whole graph has been executed and unpark main thread.
                                 if self_lock.read().unwrap().is_graph_executed() == true {
+                                    main_thread.unpark();
                                     return Ok(());
                                 }
                             }
@@ -273,6 +269,9 @@ impl DirectedAcyclicGraph {
                     }
                 });
             }
+
+            // Park main thread during node execution
+            thread::park();
 
             Ok(())
         })?;

@@ -2,12 +2,11 @@ mod graph_structure;
 mod shared_memory;
 
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
-// use graph_structure::graph::DirectedAcyclicGraph;
 use shared_memory::shm_mapping::ShmMapping;
 use std::{fs::read_to_string, str::FromStr};
 
 fn main() -> anyhow::Result<()> {
-    // Create new `DirectedAcyclicGraph`.
+    // Create new `DirectedAcyclicGraph` with nodes and edges that are moved into the graph.
     let g = DirectedAcyclicGraph::new(
         vec![
             (0, Node::new(String::from("-- Node 0 was just executed --"))),
