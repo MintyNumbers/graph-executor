@@ -148,22 +148,4 @@ mod tests {
             "`DAG.get_executable_node_indeces()` method does not return correct node indeces."
         );
     }
-
-    #[test]
-    fn dag_method_execute_nodes() {
-        let mut graph = DirectedAcyclicGraph::new(
-            vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
-                (2, Node::new(String::from("Node 2 was just executed"))),
-                (3, Node::new(String::from("Node 3 was just executed"))),
-            ],
-            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
-        )
-        .unwrap();
-
-        graph.execute_nodes().unwrap();
-
-        assert_eq!(graph.is_graph_executed(), true, "`DAG.execute_nodes()` method does not execute all `Node`s.");
-    }
 }

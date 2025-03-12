@@ -6,7 +6,7 @@ use std::{fmt, str::FromStr};
 pub struct Node {
     // TODO: create an `ExecutableNode` Trait with an `execute` method, i.e. this struct will become obsolete.
     args: String,
-    pub execution_status: ExecutionStatus,
+    pub(crate) execution_status: ExecutionStatus,
 }
 
 impl Node {
@@ -74,7 +74,7 @@ impl FromStr for Node {
 }
 
 impl Node {
-    pub fn execute(&self) -> Result<()> {
+    pub(crate) fn execute(&self) -> Result<()> {
         match self.execution_status {
             ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
             ExecutionStatus::Executable => return Err(anyhow!("Trying to execute node which is not yet set for execution.")),

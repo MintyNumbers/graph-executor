@@ -1,3 +1,9 @@
+//! Proof-of concept implementation of a graph executor component that is executed in a topological order.
+//! The graph is represented as a directed acyclic graph (DAG) where each node is executed once and the edges
+//! represent the order of execution. The goal of this component is the efficient splitting of the computations
+//! associated with each node onto multiple CPU cores using multiple threads and processes with the help of
+//! shared memory and cross-process synchronisation.
+
 mod graph_structure;
 mod shared_memory;
 
@@ -5,6 +11,7 @@ use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
 use shared_memory::shm_mapping::ShmMapping;
 use std::{fs::read_to_string, str::FromStr};
 
+/// Main function.
 fn main() -> anyhow::Result<()> {
     // Create new `DirectedAcyclicGraph` with nodes and edges that are moved into the graph.
     let g = DirectedAcyclicGraph::new(

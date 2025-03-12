@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge {
-    pub nodes: (usize, usize),
+    pub(crate) nodes: (usize, usize),
     // pub weight: i32,
 }
 

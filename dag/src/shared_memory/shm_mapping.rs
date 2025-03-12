@@ -10,16 +10,17 @@ where
     T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
 {
     shmem_flink: String,
-    pub buf_len: usize,
-    pub wrapped: T,
-    pub serialize: bool,
+    pub(crate) buf_len: usize,
+    pub(crate) wrapped: T,
+    pub(crate) serialize: bool,
 }
 
 impl<T> ShmMapping<T>
 where
     T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
 {
-    /// Creates a new shared memory mapping, writes `wrapped` to it, initializes `Mutex` and returns `ShmMapping`.
+    /// Creates a new shared memory mapping, writes `wrapped` to it, initializes `RwLock` over the shared memory
+    /// mapping and returns `ShmMapping`.
     pub fn new(shmem_flink: String, wrapped: T, serialize: bool) -> Result<Self> {
         // Construct `ShmMapping`.
         let shm_mapping = ShmMapping {
@@ -43,22 +44,23 @@ where
             }
         };
 
-        // Initialize `raw_ptr`.
+        // Initialize `raw_ptr` to the base address of the shared memory mapping.
         let mut raw_ptr: *mut u8 = shmem.as_ptr();
+        // Initialize `is_init` indicating the initialization status of the RwLock over the shared memory mapping.
         let is_init: &mut AtomicU8;
         unsafe {
             is_init = &mut *(raw_ptr as *mut u8 as *mut AtomicU8);
-            raw_ptr = raw_ptr.add(8);
+            raw_ptr = raw_ptr.add(8); // Move pointer to data address.
         };
 
-        // Initialize `raw_sync::locks::Mutex` (cross-process synchronisation).
+        // Initialize `raw_sync::locks::RwLock` (cross-process synchronisation).
         is_init.store(0, Ordering::Relaxed);
-        unsafe {
-            raw_sync::locks::Mutex::new(
-                raw_ptr,                                                     // Base address of Mutex.
-                raw_ptr.add(raw_sync::locks::Mutex::size_of(Some(raw_ptr))), // Address of data protected by mutex.
+        let (_rwlock, _bytes_used) = unsafe {
+            raw_sync::locks::RwLock::new(
+                raw_ptr,                                                      // Base address of RwLock.
+                raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))), // Address of data protected by RwLock.
             )
-            .map_err(|e| anyhow!("Failed to initialize Mutex: {}", e))?
+            .map_err(|e| anyhow!("Failed to initialize RwLock: {}", e))?
         };
         is_init.store(1, Ordering::Relaxed);
 
@@ -70,8 +72,8 @@ where
     }
 
     /// Update `self.wrapped` field and the wrapped struct stored in the shared memory mapping with
-    /// supplied by the `wrapped` argument.
-    pub fn overwrite_shared_memory_data(&mut self, wrapped: T) -> Result<()> {
+    /// the supplied `wrapped` argument.
+    pub(crate) fn update_wrapped(&mut self, wrapped: T) -> Result<()> {
         // Update `wrapped` field in struct.
         self.wrapped = wrapped;
 
@@ -82,7 +84,8 @@ where
         Ok(())
     }
 
-    /// Open shared memory mapping and return `is_init` and `raw_ptr`.
+    /// Open shared memory mapping and return `is_init` (RwLock initialization status) and `raw_ptr`
+    /// (raw pointer to the shared memory mapping).
     fn open_shared_memory(&self) -> Result<(&mut AtomicU8, *mut u8)> {
         let shmem = ShmemConf::new()
             .flink(&self.shmem_flink)
@@ -99,34 +102,38 @@ where
         Ok((is_init, raw_ptr))
     }
 
-    pub fn get_mutex(is_init: &mut AtomicU8, raw_ptr: *mut u8) -> Result<Box<dyn raw_sync::locks::LockImpl>> {
-        // Wait for initialized mutex.
+    /// Takes a raw pointer to the shared memory mapping and an atomic indicating the initialization status
+    /// of the RwLock over the shared memory mapping and returns a `RwLock` over the shared memory mapping.
+    /// The `RwLock` returned by this function is not locked.
+    pub(crate) fn get_rwlock(is_init: &mut AtomicU8, raw_ptr: *mut u8) -> Result<Box<dyn raw_sync::locks::LockImpl>> {
+        // Wait for initialized RwLock.
         while is_init.load(Ordering::Relaxed) != 1 {
             println!("This shouldn't happen?");
         }
 
-        // Load existing mutex.
-        let (mutex, _bytes_used) = unsafe {
-            raw_sync::locks::Mutex::from_existing(
-                raw_ptr,                                                     // Base address of Mutex
-                raw_ptr.add(raw_sync::locks::Mutex::size_of(Some(raw_ptr))), // Address of data  protected by mutex
+        // Load existing RwLock.
+        let (rwlock, _bytes_used) = unsafe {
+            raw_sync::locks::RwLock::from_existing(
+                raw_ptr,                                                      // Base address of RwLock.
+                raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))), // Address of data protected by RwLock.
             )
-            .map_err(|e| anyhow!("Error loading Mutex: {}", e))?
+            .map_err(|e| anyhow!("Error loading RwLock: {}", e))?
         };
 
-        Ok(mutex)
+        Ok(rwlock)
     }
 
-    /// Write `wrapped` struct bytes to shared memory.
+    /// Locks the RwLock over the shared memory mapping, writes `self.wrapped` bytes
+    /// to the shared memory mapping and unlocks the RwLock.
     fn write_to_shared_memory(&self, is_init: &mut AtomicU8, mut raw_ptr: *mut u8) -> Result<()> {
         // Acquire lock over guarded data.
-        let mutex = ShmMapping::<T>::get_mutex(is_init, raw_ptr)?;
-        let guard = mutex.lock().map_err(|e| anyhow!("Error acquiring Mutex lock: {}", e))?;
+        let write_lock = ShmMapping::<T>::get_rwlock(is_init, raw_ptr)?;
+        let guard = write_lock.lock().map_err(|e| anyhow!("Error acquiring RwLock: {}", e))?;
         // let val: &mut u8 = unsafe { &mut **guard };
 
         // Write to shared memory mapping.
         unsafe {
-            raw_ptr = raw_ptr.add(raw_sync::locks::Mutex::size_of(Some(raw_ptr))); // Move pointer to data address.
+            raw_ptr = raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))); // Move pointer to data address.
 
             // Serialize wrapped struct or cast wrapped struct as bytes.
             let wrapped_bytes: Vec<u8> = if self.serialize {
