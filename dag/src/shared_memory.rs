@@ -1,4 +1,6 @@
 pub mod as_from_bytes;
+pub mod c_style_rw_lock;
+pub mod iox2_shm_mapping;
 pub mod shm_graph;
 pub mod shm_mapping;
 
