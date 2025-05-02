@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Error, Result};
 use std::str::FromStr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge {
-    pub nodes: (usize, usize),
+    pub(crate) nodes: (usize, usize),
     // pub weight: i32,
 }
 
@@ -23,8 +23,8 @@ impl FromStr for Edge {
     ///
     /// The following two `Edge`s are identical:
     /// ```
-    /// let edge_from_string = Edge::from_str("0 -> 1 [ ]");
-    /// let edge_instantiated = Edge::new((0, 1));
+    /// let edge_from_str = Edge::from_str("0 -> 1 [ ]").unwrap();
+    /// let edge_new = Edge::new((0, 1));
     /// ```
     fn from_str(edge_string: &str) -> Result<Self> {
         let parts: Vec<&str> = (*edge_string
