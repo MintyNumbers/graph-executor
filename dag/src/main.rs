@@ -32,25 +32,22 @@ fn main() -> anyhow::Result<()> {
     match process_number {
         // Process 1
         1 => {
-            // shm_process_one::<Memory<PoolAllocator>>()?;
-            let mut iox2mapping: Iox2ShmMapping<Storage<AtomicU8>, DirectedAcyclicGraph> = Iox2ShmMapping::new(
-                filename_prefix,
-                DirectedAcyclicGraph::new(
-                    vec![
-                        (0, Node::new(String::from("-- Node 0 was just executed --"))),
-                        (1, Node::new(String::from("-- Node 1 was just executed --"))),
-                        (2, Node::new(String::from("-- Node 2 was just executed --"))),
-                        (3, Node::new(String::from("-- Node 3 was just executed --"))),
-                    ],
-                    vec![Edge::new((0, 1)), /* Edge::new((1, 2)), */ Edge::new((2, 3)), Edge::new((1, 3))],
-                )?,
+            let mut data = DirectedAcyclicGraph::new(
+                vec![
+                    (0, Node::new(String::from("-- Node 0 was just executed --"))),
+                    (1, Node::new(String::from("-- Node 1 was just executed --"))),
+                    (2, Node::new(String::from("-- Node 2 was just executed --"))),
+                    (3, Node::new(String::from("-- Node 3 was just executed --"))),
+                ],
+                vec![Edge::new((0, 1)), /* Edge::new((1, 2)), */ Edge::new((2, 3)), Edge::new((1, 3))],
             )?;
+            let mut iox2mapping: Iox2ShmMapping<Storage<AtomicU8>> = Iox2ShmMapping::new(filename_prefix, &data)?;
 
             println!("Unlocked...");
             std::thread::sleep(std::time::Duration::from_secs(5));
 
-            iox2mapping.data.graph.add_node(Node::new("rboegbrgoergoierbger".to_string()));
-            iox2mapping.write_self_to_shm()?;
+            data.graph.add_node(Node::new("rboegbrgoergoierbger".to_string()));
+            iox2mapping.write(&data)?;
             println!("Changed...");
             std::thread::sleep(std::time::Duration::from_secs(5));
 
@@ -58,8 +55,9 @@ fn main() -> anyhow::Result<()> {
         }
         // Process 2
         2 => {
-            // shm_process_two::<Memory<PoolAllocator>>()?;
-            Iox2ShmMapping::<Storage<AtomicU8>, DirectedAcyclicGraph>::open_existing(filename_prefix)?;
+            // let (shm, data_bytes) = Iox2ShmMapping::<Storage<AtomicU8>>::open(filename_prefix)?;
+            // let data: DirectedAcyclicGraph = rmp_serde::from_slice(&data_bytes)?;
+            let (_iox2mapping2, _data) = Iox2ShmMapping::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(filename_prefix)?;
             println!("Process 2 executed");
         }
         _ => {
