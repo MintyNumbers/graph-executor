@@ -1,156 +1,206 @@
-use super::as_from_bytes::AsFromBytes;
+use super::{rwlock, semaphore::Semaphore};
 use anyhow::{anyhow, Result};
-use raw_sync::locks::LockInit;
-use shared_memory::ShmemConf;
-use std::{fmt::Display, sync::atomic::AtomicU8, sync::atomic::Ordering};
+use iceoryx2_bb_container::semantic_string::SemanticString;
+use iceoryx2_bb_system_types::file_name::FileName;
+use iceoryx2_cal::{
+    dynamic_storage::{DynamicStorage, DynamicStorageBuilder, DynamicStorageOpenError},
+    named_concept::NamedConceptBuilder,
+};
+use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering};
 
-#[derive(Debug)]
-pub struct ShmMapping<T>
+// Findings:
+// - shared memory closes on scope end; it does not close on Ctrl + C
+// - to keep the mapping alive the associated `Shm` can't be deconstructed
+// - each time i create a new `Shm` it gets a new payload_start_address
+// - creating `Shm` in one process and opening it in another results in an "off" start address
+//   - after each read the offset becomes bigger
+//   - solution: imma just do n `DynamicStorage`s for now
+// - Segmentation fault (core dumped) when trying to cast byte array as `DirectedAcyclicGraph`
+//   - no segfault inside the process which created the graph
+//   - suggests that the graph structure depends on something more (which is not translated into the byte array representation)
+//   - solution: serialization...
+// - `DynamicStorage` uses `Atomic`s due to no method giving an exclusive reference => `Atomic`s' interior mutability is necessary
+// - infinite loop when trying to serialize the RwLock/Mutex after acquiring lock or when trying to acquire non-released lock
+
+pub struct Iox2ShmMapping<S>
 where
-    T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
+    S: DynamicStorage<AtomicU8>,
 {
-    shmem_flink: String,
-    pub(crate) buf_len: usize,
-    pub(crate) wrapped: T,
-    pub(crate) serialize: bool,
+    // buf_len: usize,       // Length of serialized data in bytes
+    filename_prefix: String, // Prefix of all storages in shared memory
+    write_lock: Semaphore,   // Write lock, 1: no current writer, 0: currently active writer
+    read_count: Semaphore,   // Number of current readers
+    data_storages: Vec<S>,   // Keep alive so that the storage is not discarded
 }
 
-impl<T> ShmMapping<T>
+impl<S> std::fmt::Debug for Iox2ShmMapping<S>
 where
-    T: Display + AsFromBytes + serde::Serialize + serde::de::DeserializeOwned,
+    S: DynamicStorage<AtomicU8>,
 {
-    /// Creates a new shared memory mapping, writes `wrapped` to it, initializes `RwLock` over the shared memory
-    /// mapping and returns `ShmMapping`.
-    pub fn new(shmem_flink: String, wrapped: T, serialize: bool) -> Result<Self> {
-        // Construct `ShmMapping`.
-        let shm_mapping = ShmMapping {
-            shmem_flink: shmem_flink,
-            buf_len: if serialize {
-                rmp_serde::to_vec(&wrapped)?.len()
-            } else {
-                wrapped.as_bytes().len()
-            },
-            wrapped: wrapped,
-            serialize: serialize,
-        };
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Iox2ShmMapping: {{filename_prefix: {:?}, write_lock: {:?}, read_count: {:?}, data_storages: {:?}}}",
+            self.filename_prefix, self.write_lock, self.read_count, self.data_storages
+        )
+    }
+}
 
-        // Create or open the shared memory mapping
-        // let _ = std::fs::remove_file(&shm_mapping.shmem_flink);
-        let shmem = match ShmemConf::new().size(shm_mapping.buf_len).flink(&shm_mapping.shmem_flink).create() {
-            Ok(m) => m,
-            Err(shared_memory::ShmemError::LinkExists) => ShmemConf::new().flink(&shm_mapping.shmem_flink).open()?,
-            Err(e) => {
-                return Err(anyhow!("Unable to create new shared memory section {}: {}", &shm_mapping.shmem_flink, e));
-            }
-        };
+impl<S> Iox2ShmMapping<S>
+where
+    S: DynamicStorage<AtomicU8>,
+{
+    /// Create new Iox2ShmMapping with n storages with filename_prefix.
+    pub fn new(filename_prefix: String, data: impl serde::Serialize + Debug) -> Result<Self> {
+        let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
 
-        // Initialize `raw_ptr` to the base address of the shared memory mapping.
-        let mut raw_ptr: *mut u8 = shmem.as_ptr();
-        // Initialize `is_init` indicating the initialization status of the RwLock over the shared memory mapping.
-        let is_init: &mut AtomicU8;
-        unsafe {
-            is_init = &mut *(raw_ptr as *mut u8 as *mut AtomicU8);
-            raw_ptr = raw_ptr.add(8); // Move pointer to data address.
-        };
+        // Initial write of data to shared memory
+        let mut offset = 0;
+        let mut data_storages: Vec<S> = vec![];
+        let data_bytes = rmp_serde::to_vec(&data)?;
+        for byte in data_bytes.as_slice() {
+            let storage_name: FileName = FileName::new(format!("{}_{}", filename_prefix, offset).as_bytes())?;
+            let storage = S::Builder::new(&storage_name)
+                .create(AtomicU8::new(0))
+                .map_err(|e| anyhow!("Failed to create new shared memory Storage: {:?}", e))?;
+            storage.get().store(*byte, Ordering::Relaxed);
 
-        // Initialize `raw_sync::locks::RwLock` (cross-process synchronisation).
-        is_init.store(0, Ordering::Relaxed);
-        let (_rwlock, _bytes_used) = unsafe {
-            raw_sync::locks::RwLock::new(
-                raw_ptr,                                                      // Base address of RwLock.
-                raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))), // Address of data protected by RwLock.
-            )
-            .map_err(|e| anyhow!("Failed to initialize RwLock: {}", e))?
-        };
-        is_init.store(1, Ordering::Relaxed);
+            data_storages.push(storage);
+            offset += 1;
+        }
 
-        // Write `wrapped` to shared memory mapping.
-        shm_mapping.write_to_shared_memory(is_init, raw_ptr)?;
+        // Create RwLock
+        let write_lock = Semaphore::create(&format!("/{}_write_lock_write", filename_prefix), 1).map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
+        let read_count = Semaphore::create(&format!("/{}_read_count_write", filename_prefix), 0).map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
 
-        // Return `ShmMapping`.
-        Ok(shm_mapping)
+        println!("data: {:?}\ndata_bytes: {:?}", data, data_bytes.as_slice());
+
+        Ok(Iox2ShmMapping {
+            filename_prefix,
+            write_lock,
+            read_count,
+            data_storages,
+        })
     }
 
-    /// Update `self.wrapped` field and the wrapped struct stored in the shared memory mapping with
-    /// the supplied `wrapped` argument.
-    pub(crate) fn update_wrapped(&mut self, wrapped: T) -> Result<()> {
-        // Update `wrapped` field in struct.
-        self.wrapped = wrapped;
+    /// Create Iox2ShmMapping from storages with filename_prefix that already exist in shared memory.
+    pub fn open<T: Debug + serde::de::DeserializeOwned>(filename_prefix: String) -> Result<(Self, T)> {
+        // Read semaphore from shared memory and acquire read lock
+        let write_lock = Semaphore::open(&format!("/{}_write_lock_write", filename_prefix)).map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
+        let read_count = Semaphore::open(&format!("/{}_read_count_write", filename_prefix)).map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
+        rwlock::read_lock(&write_lock, &read_count)?;
 
-        // Update `wrapped` in shared memory mapping.
-        let (is_init, raw_ptr) = self.open_shared_memory()?;
-        self.write_to_shared_memory(is_init, raw_ptr)?;
+        // Read data bytes from shared memory
+        let (data_bytes, data_storages) = Iox2ShmMapping::<S>::read_from_shm_by_filename(&filename_prefix)?;
+
+        // Release read lock
+        rwlock::read_unlock(&read_count)?;
+
+        // Deserialize data
+        let data = rmp_serde::from_slice::<T>(&data_bytes)?;
+
+        println!("write_lock: {:?}\tread_count: {:?}", write_lock.get_value(), read_count.get_value());
+        println!("data: {:?}\ndata_bytes: {:?}", data, data_bytes);
+
+        Ok((
+            Iox2ShmMapping {
+                filename_prefix,
+                write_lock,
+                read_count,
+                data_storages,
+            },
+            data,
+        ))
+    }
+
+    /// Acquire read lock, serialize read data from existing storages, deserialize it and write to `self.data`.
+    pub fn read<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+        // Acquire read lock
+        rwlock::read_lock(&self.write_lock, &self.read_count)?;
+
+        // Read, deserialize and write data to self
+        let (data_bytes, _) = Iox2ShmMapping::<S>::read_from_shm_by_filename(&self.filename_prefix)?;
+        let data: T = rmp_serde::from_slice::<T>(data_bytes.as_slice())?;
+
+        println!("Read Locked...");
+        std::thread::sleep(std::time::Duration::from_secs(5));
+
+        // Release read lock
+        rwlock::read_unlock(&self.read_count)?;
+
+        Ok(data)
+    }
+
+    /// Acquire write lock, serialize `self.data` and write it to existing storages.
+    /// Storages are defined by `self.filename_prefix` and new storages are created if necessary / old storages are deleted if no longer necessary.
+    pub fn write<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
+        // Acquire write lock
+        rwlock::write_lock(&self.write_lock, &self.read_count)?;
+
+        // Initialize data for write
+        self.write_to_shm_by_filename(data)?;
+
+        println!("Write Locked...");
+        std::thread::sleep(std::time::Duration::from_secs(5));
+
+        // Release write lock
+        rwlock::write_unlock(&self.write_lock)?;
 
         Ok(())
     }
 
-    /// Open shared memory mapping and return `is_init` (RwLock initialization status) and `raw_ptr`
-    /// (raw pointer to the shared memory mapping).
-    fn open_shared_memory(&self) -> Result<(&mut AtomicU8, *mut u8)> {
-        let shmem = ShmemConf::new()
-            .flink(&self.shmem_flink)
-            .open()
-            .map_err(|e| anyhow!("Unable to open existing shared memory section {}: {}", &self.shmem_flink, e))?;
-
-        let mut raw_ptr: *mut u8 = shmem.as_ptr();
-        let is_init: &mut AtomicU8;
-        unsafe {
-            is_init = &mut *(raw_ptr as *mut u8 as *mut AtomicU8);
-            raw_ptr = raw_ptr.add(8);
-        };
-
-        Ok((is_init, raw_ptr))
-    }
-
-    /// Takes a raw pointer to the shared memory mapping and an atomic indicating the initialization status
-    /// of the RwLock over the shared memory mapping and returns a `RwLock` over the shared memory mapping.
-    /// The `RwLock` returned by this function is not locked.
-    pub(crate) fn get_rwlock(is_init: &mut AtomicU8, raw_ptr: *mut u8) -> Result<Box<dyn raw_sync::locks::LockImpl>> {
-        // Wait for initialized RwLock.
-        while is_init.load(Ordering::Relaxed) != 1 {
-            println!("This shouldn't happen?");
-        }
-
-        // Load existing RwLock.
-        let (rwlock, _bytes_used) = unsafe {
-            raw_sync::locks::RwLock::from_existing(
-                raw_ptr,                                                      // Base address of RwLock.
-                raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))), // Address of data protected by RwLock.
-            )
-            .map_err(|e| anyhow!("Error loading RwLock: {}", e))?
-        };
-
-        Ok(rwlock)
-    }
-
-    /// Locks the RwLock over the shared memory mapping, writes `self.wrapped` bytes
-    /// to the shared memory mapping and unlocks the RwLock.
-    fn write_to_shared_memory(&self, is_init: &mut AtomicU8, mut raw_ptr: *mut u8) -> Result<()> {
-        // Acquire lock over guarded data.
-        let write_lock = ShmMapping::<T>::get_rwlock(is_init, raw_ptr)?;
-        let guard = write_lock.lock().map_err(|e| anyhow!("Error acquiring RwLock: {}", e))?;
-        // let val: &mut u8 = unsafe { &mut **guard };
-
-        // Write to shared memory mapping.
-        unsafe {
-            raw_ptr = raw_ptr.add(raw_sync::locks::RwLock::size_of(Some(raw_ptr))); // Move pointer to data address.
-
-            // Serialize wrapped struct or cast wrapped struct as bytes.
-            let wrapped_bytes: Vec<u8> = if self.serialize {
-                // rmp_serde::to_vec(&self.wrapped)?
-                self.wrapped.as_bytes().to_vec()
-            } else {
-                self.wrapped.as_bytes().to_vec()
+    /// Returns `data` or `lock` bytes from storages defined by `filename_prefix`.
+    fn read_from_shm_by_filename(filename_prefix: &str) -> Result<(Vec<u8>, Vec<S>)> {
+        let mut offset = 0;
+        let mut data_bytes = vec![];
+        let mut data_storages = vec![];
+        'x: loop {
+            let storage_name: FileName = FileName::new(format!("{}_{}", filename_prefix, offset).as_bytes())?;
+            let storage = match S::Builder::new(&storage_name).open() {
+                Err(DynamicStorageOpenError::DoesNotExist) => break 'x, // Break once all existing storages have been read
+                Err(e) => panic!("Failed to open existing DynamicStorage: {:?}", e),
+                Ok(s) => s,
             };
 
-            for byte in wrapped_bytes {
-                raw_ptr.write(byte); // Write wrapped struct byte to memory.
-                raw_ptr = raw_ptr.add(1); // Move pointer forward by the size of a byte.
-            }
+            data_bytes.push(storage.get().load(Ordering::Relaxed));
+            data_storages.push(storage);
+            offset += 1;
         }
 
-        // Release lock over guarded data.
-        drop(guard);
+        Ok((data_bytes, data_storages))
+    }
+
+    /// Writes supplied bytes to either the `data_storages` or `lock_storages` in `Self`.
+    /// Argument `data` determines whether `self.data` or `self.lock` will be written to shared memory.
+    fn write_to_shm_by_filename<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
+        let mut offset = 0;
+        let data_bytes = rmp_serde::to_vec(&data)?; // Serialized data bytes to be written in `data_storages`
+
+        // Write to existing shared memory
+        for byte in data_bytes {
+            match &self.data_storages.get(offset) {
+                // Write to existing storages
+                Some(storage) => storage.get().store(byte, Ordering::Relaxed),
+                // Create new storages if data to be written requires more space than the previously stored data
+                None => {
+                    let storage_name: FileName = FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                    let storage = S::Builder::new(&storage_name)
+                        .create(AtomicU8::new(0))
+                        .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?;
+                    storage.get().store(byte, Ordering::Relaxed);
+
+                    self.data_storages.push(storage);
+                }
+            }
+            offset += 1;
+        }
+        // Remove storages if data to be written requires less space than the previously stored data
+        while &self.data_storages.len() - offset > 0 {
+            let storage = &self.data_storages.pop().ok_or(anyhow!("No DynamicStorage despite successful check."))?;
+            storage.acquire_ownership(); // is dropped on scope end
+        }
+
+        assert_eq!(self.data_storages.len(), offset);
 
         Ok(())
     }

@@ -1,6 +1,3 @@
-pub mod as_from_bytes;
-pub mod c_style_rw_lock;
-pub mod iox2_shm_mapping;
 pub mod rwlock;
 pub mod semaphore;
 pub mod shm_graph;
@@ -8,7 +5,7 @@ pub mod shm_mapping;
 
 #[cfg(test)]
 mod tests {
-    use super::{iox2_shm_mapping::Iox2ShmMapping, rwlock};
+    use super::{rwlock, semaphore::Semaphore, shm_mapping::Iox2ShmMapping};
     use crate::graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
     use anyhow::{anyhow, Result};
     use serde::Serialize;

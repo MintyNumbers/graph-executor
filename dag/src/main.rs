@@ -11,7 +11,7 @@ mod shared_memory;
 
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use shared_memory::iox2_shm_mapping::Iox2ShmMapping;
+use shared_memory::shm_mapping::Iox2ShmMapping;
 use std::sync::atomic::AtomicU8;
 
 /// Main function.
