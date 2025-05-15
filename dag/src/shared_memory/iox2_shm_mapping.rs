@@ -94,7 +94,7 @@ where
         let (data_bytes, data_storages) = Iox2ShmMapping::<S>::read_from_shm_by_filename(&filename_prefix)?;
 
         // Release read lock
-        rwlock::read_unlock(&write_lock, &read_count)?;
+        rwlock::read_unlock(&read_count)?;
 
         // Deserialize data
         let data = rmp_serde::from_slice::<T>(&data_bytes)?;
@@ -126,7 +126,7 @@ where
         std::thread::sleep(std::time::Duration::from_secs(5));
 
         // Release read lock
-        rwlock::read_unlock(&self.write_lock, &self.read_count)?;
+        rwlock::read_unlock(&self.read_count)?;
 
         Ok(data)
     }

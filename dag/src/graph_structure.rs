@@ -6,7 +6,6 @@ pub mod node;
 #[cfg(test)]
 mod tests {
     use super::{edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node};
-    use crate::shared_memory::as_from_bytes::AsFromBytes;
     use petgraph::graph::NodeIndex;
     use std::{collections::VecDeque, str::FromStr};
 
@@ -114,7 +113,7 @@ mod tests {
         .unwrap();
 
         let graph_from_str = DirectedAcyclicGraph::from_str(&format!("{}", graph_new)).unwrap();
-        let graph_from_bytes = DirectedAcyclicGraph::from_bytes(graph_new.as_bytes());
+        let graph_from_bytes = rmp_serde::from_slice::<DirectedAcyclicGraph>(&rmp_serde::to_vec(&graph_new).unwrap()).unwrap();
 
         assert_eq!(graph_new, graph_from_str, "`DAG::new()` and `DAG::from_str()` initializations are not equal.");
         assert_eq!(

@@ -1,5 +1,4 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
-use crate::shared_memory::as_from_bytes::AsFromBytes;
 use anyhow::{anyhow, Error, Ok, Result};
 use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph};
 use std::{
@@ -64,8 +63,6 @@ impl FromStr for DirectedAcyclicGraph {
         DirectedAcyclicGraph::new(nodes, edges)
     }
 }
-
-impl AsFromBytes for DirectedAcyclicGraph {}
 
 impl Index<NodeIndex> for DirectedAcyclicGraph {
     type Output = Node;
