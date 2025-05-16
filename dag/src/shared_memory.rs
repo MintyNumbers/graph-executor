@@ -4,7 +4,7 @@ pub mod shm_mapping;
 
 #[cfg(test)]
 mod tests {
-    use super::{rwlock, semaphore::Semaphore, shm_mapping::Iox2ShmMapping};
+    use super::{rwlock, semaphore::Semaphore, shm_mapping::ShmMapping};
     use crate::graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
     use anyhow::{anyhow, Result};
     use serde::Serialize;

@@ -22,10 +22,7 @@ use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering};
 // - `DynamicStorage` uses `Atomic`s due to no method giving an exclusive reference => `Atomic`s' interior mutability is necessary
 // - infinite loop when trying to serialize the RwLock/Mutex after acquiring lock or when trying to acquire non-released lock
 
-pub struct Iox2ShmMapping<S>
-where
-    S: DynamicStorage<AtomicU8>,
-{
+pub struct ShmMapping<S: DynamicStorage<AtomicU8>> {
     // buf_len: usize,       // Length of serialized data in bytes
     filename_prefix: String, // Prefix of all storages in shared memory
     write_lock: Semaphore,   // Write lock, 1: no current writer, 0: currently active writer
@@ -33,7 +30,7 @@ where
     data_storages: Vec<S>,   // Keep alive so that the storage is not discarded
 }
 
-impl<S> std::fmt::Debug for Iox2ShmMapping<S>
+impl<S> std::fmt::Debug for ShmMapping<S>
 where
     S: DynamicStorage<AtomicU8>,
 {
@@ -46,10 +43,9 @@ where
     }
 }
 
-impl<S> Iox2ShmMapping<S>
-where
-    S: DynamicStorage<AtomicU8>,
-{
+// TODO: update docs
+
+impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
     /// Create new Iox2ShmMapping with n storages with filename_prefix.
     pub fn new(filename_prefix: String, data: impl serde::Serialize + Debug) -> Result<Self> {
         let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
@@ -75,7 +71,7 @@ where
 
         println!("data: {:?}\ndata_bytes: {:?}", data, data_bytes.as_slice());
 
-        Ok(Iox2ShmMapping {
+        Ok(ShmMapping {
             filename_prefix,
             write_lock,
             read_count,
@@ -84,14 +80,14 @@ where
     }
 
     /// Create Iox2ShmMapping from storages with filename_prefix that already exist in shared memory.
-    pub fn open<T: Debug + serde::de::DeserializeOwned>(filename_prefix: String) -> Result<(Self, T)> {
+    pub fn open<T: serde::de::DeserializeOwned>(filename_prefix: String) -> Result<(Self, T)> {
         // Read semaphore from shared memory and acquire read lock
         let write_lock = Semaphore::open(&format!("/{}_write_lock_write", filename_prefix)).map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
         let read_count = Semaphore::open(&format!("/{}_read_count_write", filename_prefix)).map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
         rwlock::read_lock(&write_lock, &read_count)?;
 
         // Read data bytes from shared memory
-        let (data_bytes, data_storages) = Iox2ShmMapping::<S>::read_from_shm_by_filename(&filename_prefix)?;
+        let (data_bytes, data_storages) = ShmMapping::<S>::read_from_shm_by_filename(&filename_prefix)?;
 
         // Release read lock
         rwlock::read_unlock(&read_count)?;
@@ -99,11 +95,8 @@ where
         // Deserialize data
         let data = rmp_serde::from_slice::<T>(&data_bytes)?;
 
-        println!("write_lock: {:?}\tread_count: {:?}", write_lock.get_value(), read_count.get_value());
-        println!("data: {:?}\ndata_bytes: {:?}", data, data_bytes);
-
         Ok((
-            Iox2ShmMapping {
+            ShmMapping {
                 filename_prefix,
                 write_lock,
                 read_count,
@@ -114,39 +107,80 @@ where
     }
 
     /// Acquire read lock, serialize read data from existing storages, deserialize it and write to `self.data`.
-    pub fn read<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+    pub fn read<T: serde::de::DeserializeOwned>(&mut self) -> Result<T> {
         // Acquire read lock
-        rwlock::read_lock(&self.write_lock, &self.read_count)?;
+        self.read_lock()?;
 
         // Read, deserialize and write data to self
-        let (data_bytes, _) = Iox2ShmMapping::<S>::read_from_shm_by_filename(&self.filename_prefix)?;
+        let (data_bytes, data_storages) = ShmMapping::<S>::read_from_shm_by_filename(&self.filename_prefix)?;
         let data: T = rmp_serde::from_slice::<T>(data_bytes.as_slice())?;
 
-        println!("Read Locked...");
-        std::thread::sleep(std::time::Duration::from_secs(5));
-
         // Release read lock
-        rwlock::read_unlock(&self.read_count)?;
+        self.read_unlock()?;
+
+        // Add new storages to self or remove no longer used ones.
+        self.adjust_data_storages(data_storages)?;
 
         Ok(data)
     }
 
-    /// Acquire write lock, serialize `self.data` and write it to existing storages.
+    /// Acquire write lock and write `data` to shared memory.
     /// Storages are defined by `self.filename_prefix` and new storages are created if necessary / old storages are deleted if no longer necessary.
     pub fn write<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
         // Acquire write lock
-        rwlock::write_lock(&self.write_lock, &self.read_count)?;
+        self.write_lock()?;
 
         // Initialize data for write
         self.write_to_shm_by_filename(data)?;
 
-        println!("Write Locked...");
-        std::thread::sleep(std::time::Duration::from_secs(5));
-
         // Release write lock
-        rwlock::write_unlock(&self.write_lock)?;
+        self.write_unlock()?;
 
         Ok(())
+    }
+
+    /// Acquire write lock, write `data_write` to shared memory if `data_condition` is equal to current data in shared memory.
+    /// If `data_condition` is not equal to the data in shared memory, then return the data in shared memory.
+    pub fn write_on_equal_to_shm<T: serde::Serialize + serde::de::DeserializeOwned + PartialEq>(
+        &mut self,
+        data_equal_to_shm: &T,
+        data_write: &T,
+    ) -> Result<Option<T>> {
+        // Acquire exclusive (write) lock
+        self.write_lock()?;
+
+        // Write data to shared memory if `data_condition` is equal to current state of data in shared memory
+        let (data_bytes, data_storages) = ShmMapping::<S>::read_from_shm_by_filename(&self.filename_prefix)?;
+        let data_in_shm: T = rmp_serde::from_slice::<T>(data_bytes.as_slice())?;
+        if data_in_shm == *data_equal_to_shm {
+            self.write_to_shm_by_filename(data_write)?;
+        } else {
+            return Ok(Some(data_in_shm));
+        }
+
+        // Release write lock
+        self.write_unlock()?;
+
+        // Add new storages to self or remove no longer used ones.
+        self.adjust_data_storages(data_storages)?;
+
+        Ok(None)
+    }
+
+    pub(crate) fn read_lock(&mut self) -> Result<()> {
+        rwlock::read_lock(&self.write_lock, &self.read_count)
+    }
+
+    pub(crate) fn read_unlock(&mut self) -> Result<()> {
+        rwlock::read_unlock(&self.read_count)
+    }
+
+    pub(crate) fn write_lock(&mut self) -> Result<()> {
+        rwlock::write_lock(&self.write_lock, &self.read_count)
+    }
+
+    pub(crate) fn write_unlock(&mut self) -> Result<()> {
+        rwlock::write_unlock(&self.write_lock)
     }
 
     /// Returns `data` or `lock` bytes from storages defined by `filename_prefix`.
@@ -201,6 +235,34 @@ where
         }
 
         assert_eq!(self.data_storages.len(), offset);
+
+        Ok(())
+    }
+
+    /// Adjust `self.data_storages` based on whether `new_data_storages` is longer or shorter than `self.data_storages`.
+    fn adjust_data_storages(&mut self, new_data_storages: Vec<S>) -> Result<()> {
+        // Remove storages if the data in the shared memory now requires fewer storages
+        while new_data_storages.len() < self.data_storages.len() {
+            self.data_storages.pop();
+        }
+
+        // Add storages if the data in the shared memory now requires more storages
+        if new_data_storages.len() > self.data_storages.len() {
+            for (i, new_s) in new_data_storages.into_iter().enumerate() {
+                match self.data_storages.get(i) {
+                    Some(s) => {
+                        if s.name() != new_s.name() {
+                            return Err(anyhow!(
+                                "Old and new storage don't share filename despite equal indeces: {} != {}",
+                                s.name(),
+                                new_s.name()
+                            ));
+                        }
+                    }
+                    None => self.data_storages.push(new_s),
+                }
+            }
+        }
 
         Ok(())
     }

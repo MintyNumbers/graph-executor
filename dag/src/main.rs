@@ -11,7 +11,7 @@ mod shared_memory;
 
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use shared_memory::shm_mapping::Iox2ShmMapping;
+use shared_memory::shm_mapping::ShmMapping;
 use std::sync::atomic::AtomicU8;
 
 /// Main function.
@@ -41,13 +41,13 @@ fn main() -> anyhow::Result<()> {
                 ],
                 vec![Edge::new((0, 1)), /* Edge::new((1, 2)), */ Edge::new((2, 3)), Edge::new((1, 3))],
             )?;
-            let mut iox2mapping: Iox2ShmMapping<Storage<AtomicU8>> = Iox2ShmMapping::new(filename_prefix, &data)?;
+            let mut shm_mapping: ShmMapping<Storage<AtomicU8>> = ShmMapping::new(filename_prefix, &data)?;
 
             println!("Unlocked...");
             std::thread::sleep(std::time::Duration::from_secs(5));
 
             data.graph.add_node(Node::new("rboegbrgoergoierbger".to_string()));
-            iox2mapping.write(&data)?;
+            shm_mapping.write(&data)?;
             println!("Changed...");
             std::thread::sleep(std::time::Duration::from_secs(5));
 
@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
         2 => {
             // let (shm, data_bytes) = Iox2ShmMapping::<Storage<AtomicU8>>::open(filename_prefix)?;
             // let data: DirectedAcyclicGraph = rmp_serde::from_slice(&data_bytes)?;
-            let (_iox2mapping2, _data) = Iox2ShmMapping::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(filename_prefix)?;
+            let (_shm_mapping_2, _data) = ShmMapping::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(filename_prefix)?;
             println!("Process 2 executed");
         }
         _ => {
