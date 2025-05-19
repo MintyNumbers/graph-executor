@@ -19,6 +19,14 @@
             "program": "${workspaceFolder}/dag/target/debug/dag",
             "args": ["2"],
             "cwd": "${workspaceFolder}"
-        }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug graph execution",
+            "program": "${workspaceFolder}/dag/target/debug/dag",
+            "args": ["3"],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }
