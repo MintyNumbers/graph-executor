@@ -17,8 +17,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build DAG Project
-      working-directory: ./dag
+      working-directory: .
       run: cargo build --verbose
     - name: Run DAG Project Tests
-      working-directory: ./dag
+      working-directory: .
       run: cargo test --verbose
