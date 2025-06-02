@@ -1,6 +1,6 @@
+pub mod posix_shared_memory;
 pub mod rwlock;
 pub mod semaphore;
-pub mod shm_mapping;
 
 #[cfg(test)]
 mod tests {

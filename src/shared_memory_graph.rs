@@ -1,4 +1,5 @@
 pub mod execute_graph;
+pub mod shm_graph;
 
 #[cfg(test)]
 mod tests {

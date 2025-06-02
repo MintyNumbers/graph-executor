@@ -1,10 +1,8 @@
 use super::{rwlock, semaphore::Semaphore};
-use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
 use anyhow::{anyhow, Result};
 use iceoryx2_bb_container::semantic_string::SemanticString;
 use iceoryx2_bb_system_types::file_name::FileName;
 use iceoryx2_cal::{dynamic_storage::DynamicStorage, dynamic_storage::DynamicStorageBuilder, named_concept::NamedConceptBuilder};
-use petgraph::graph::NodeIndex;
 use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
 // Findings:
@@ -21,14 +19,14 @@ use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 // - `DynamicStorage` uses `Atomic`s due to no method giving an exclusive reference => `Atomic`s' interior mutability is necessary
 // - infinite loop when trying to serialize the RwLock/Mutex after acquiring lock or when trying to acquire non-released lock
 
-pub struct ShmMapping<S: DynamicStorage<AtomicU8>> {
+pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
     filename_prefix: String, // Prefix of all storages in shared memory
     write_lock: Semaphore,   // Write lock, 1: no current writer, 0: currently active writer
     read_count: Semaphore,   // Number of current readers
     data_storages: Vec<S>,   // Keep alive so that the storage is not discarded
 }
 
-impl<S> std::fmt::Debug for ShmMapping<S>
+impl<S> std::fmt::Debug for PosixSharedMemory<S>
 where
     S: DynamicStorage<AtomicU8>,
 {
@@ -43,7 +41,7 @@ where
 
 // TODO: update docs
 
-impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
+impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
     /// Create new Iox2ShmMapping with n storages with filename_prefix.
     pub fn new(filename_prefix: &str, data: impl serde::Serialize + Debug) -> Result<Self> {
         let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
@@ -52,7 +50,7 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
         let write_lock = Semaphore::create(&format!("/{}_write_lock", filename_prefix), 1).map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
         let read_count = Semaphore::create(&format!("/{}_read_count", filename_prefix), 0).map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
 
-        let mut shm_mapping = ShmMapping {
+        let mut shm_mapping = PosixSharedMemory {
             filename_prefix,
             write_lock,
             read_count,
@@ -73,7 +71,7 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
         let write_lock = Semaphore::open(&format!("/{}_write_lock", filename_prefix)).map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
         let read_count = Semaphore::open(&format!("/{}_read_count", filename_prefix)).map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
 
-        let mut shm_mapping = ShmMapping {
+        let mut shm_mapping = PosixSharedMemory {
             filename_prefix,
             write_lock,
             read_count,
@@ -127,7 +125,7 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
 
     /// Acquire write lock, write `data_write` to shared memory if `data_condition` is equal to current data in shared memory.
     /// If `data_condition` is not equal to the data in shared memory, then return the data in shared memory.
-    pub fn shm_compare_graph_and_swap<T: serde::Serialize + serde::de::DeserializeOwned + PartialEq>(
+    pub fn shm_compare_data_and_swap<T: serde::Serialize + serde::de::DeserializeOwned + PartialEq>(
         &mut self,
         data_equal_to_shm: &T,
         data_write: &T,
@@ -153,42 +151,6 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
         }
     }
 
-    /// Acquire write lock and advance execution status to
-    pub fn shm_compare_node_execution_status_and_update(
-        &mut self,
-        node_index: NodeIndex,
-        new_execution_status: ExecutionStatus,
-    ) -> Result<Option<DirectedAcyclicGraph>> {
-        // Old execution status for conditional write
-        let old_execution_status = match new_execution_status {
-            ExecutionStatus::NonExecutable => return Err(anyhow!("New execution status cannot be ExecutionStatus::NonExecutable.")),
-            ExecutionStatus::Executable => ExecutionStatus::NonExecutable,
-            ExecutionStatus::Executing => ExecutionStatus::Executable,
-            ExecutionStatus::Executed => ExecutionStatus::Executing,
-        };
-
-        // Acquire exclusive (write) lock
-        self.write_lock()?;
-
-        // Write data to shared memory if `data_condition` is equal to current state of data in shared memory
-        let graph_bytes = self.read_from_shm()?;
-        let mut graph_in_shm = rmp_serde::from_slice::<DirectedAcyclicGraph>(graph_bytes.as_slice())?;
-        match graph_in_shm[node_index].execution_status == old_execution_status {
-            true => {
-                // Release write lock and return None on successful write
-                graph_in_shm[node_index].execution_status = new_execution_status;
-                self.write_to_shm(&graph_in_shm)?;
-                self.write_unlock()?;
-                return Ok(None);
-            }
-            false => {
-                // Release write lock and if `data_condition` no longer matches return `data_in_shm`
-                self.write_unlock()?;
-                return Ok(Some(graph_in_shm));
-            }
-        }
-    }
-
     pub(crate) fn read_lock(&mut self) -> Result<()> {
         rwlock::read_lock(&self.write_lock, &self.read_count)
     }
@@ -206,7 +168,7 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
     }
 
     /// Returns `data_bytes` from storages defined by `filename_prefix` and writes `data_storages` to `self`.
-    fn read_from_shm(&mut self) -> Result<Vec<u8>> {
+    pub(crate) fn read_from_shm(&mut self) -> Result<Vec<u8>> {
         let mut bytes = vec![];
 
         // Read total buffer length from shared memory
@@ -262,7 +224,7 @@ impl<S: DynamicStorage<AtomicU8>> ShmMapping<S> {
 
     /// Writes supplied bytes to either the `data_storages` or `lock_storages` in `Self`.
     /// Argument `data` determines whether `self.data` or `self.lock` will be written to shared memory.
-    fn write_to_shm<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
+    pub(crate) fn write_to_shm<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
         let bytes = {
             let data_bytes = rmp_serde::to_vec(&data)?; // Serialized data bytes to be written in `data_storages`
             let usize_buf_len = usize::MAX.to_be_bytes().len(); // Number of storages (number of bytes) required for a single usize as bytes

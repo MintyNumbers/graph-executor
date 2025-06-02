@@ -8,12 +8,13 @@
 
 mod graph_structure;
 mod shared_memory;
-mod shm_graph_execution;
+mod shared_memory_graph;
 
-use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
+use crate::graph_structure::graph::DirectedAcyclicGraph;
+use graph_structure::{edge::Edge, node::Node};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use shared_memory::shm_mapping::ShmMapping;
-use shm_graph_execution::execute_graph;
+use shared_memory::posix_shared_memory::PosixSharedMemory;
+use shared_memory_graph::execute_graph;
 use std::sync::atomic::AtomicU8;
 
 /// Main function.
@@ -31,7 +32,7 @@ fn main() -> anyhow::Result<()> {
 
     // Different
     let filename_prefix = "mystorage".to_string();
-    let mut dag = DirectedAcyclicGraph::new(
+    let dag = DirectedAcyclicGraph::new(
         vec![
             (0, Node::new(String::from("-- Node 0 was just executed --"))),
             (1, Node::new(String::from("-- Node 1 was just executed --"))),
@@ -54,7 +55,7 @@ fn main() -> anyhow::Result<()> {
     match process_number {
         // Process 1
         1 => {
-            let mut shm_mapping = ShmMapping::<Storage<AtomicU8>>::new(&filename_prefix, &dag)?;
+            let mut shm_mapping = PosixSharedMemory::<Storage<AtomicU8>>::new(&filename_prefix, &dag)?;
             // println!("Initial write complete: {} {}", shm_mapping.data_storages.len(), dag);
             std::thread::sleep(std::time::Duration::from_secs(5));
 
@@ -63,14 +64,14 @@ fn main() -> anyhow::Result<()> {
             // println!("Changed...");
             // std::thread::sleep(std::time::Duration::from_secs(5));
 
-            let data = shm_mapping.read::<DirectedAcyclicGraph>()?;
+            let _data = shm_mapping.read::<DirectedAcyclicGraph>()?;
             // println!("data: {}, {}", shm_mapping.data_storages.len(), data);
 
             println!("Process 1 executed");
         }
         // Process 2
         2 => {
-            let (mut shm_mapping_2, mut data) = ShmMapping::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(&filename_prefix)?;
+            let (mut shm_mapping_2, mut data) = PosixSharedMemory::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(&filename_prefix)?;
             // println!("Data from shm: {} {}", shm_mapping_2.data_storages.len(), data);
 
             // for i in 0..50 {
