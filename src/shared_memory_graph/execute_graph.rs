@@ -1,11 +1,10 @@
-use crate::{
-    graph_structure::execution_status::ExecutionStatus, graph_structure::graph::DirectedAcyclicGraph, shared_memory::posix_shared_memory::PosixSharedMemory,
-};
+use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
+use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
 use petgraph::{graph::NodeIndex, Direction};
 use rand::Rng;
-use std::{sync::atomic::AtomicU8, thread, time::Duration};
+use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
 
 /// Execute graph stored in shared memory mapping.
 pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph) -> Result<()> {
@@ -27,10 +26,11 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
     };
 
     let mut rng = rand::rng();
+    let mut current_dag;
     loop {
         // Get an executable `Node`, set `execution_status` for `node_index` to `ExecutionStatus::Executing` and execute associated `Node`.
         // If no executable `Node` is available or the chosen `Node` is already being executed by another process sleep for 10ms.
-        let mut current_dag = shared_memory.read::<DirectedAcyclicGraph>()?;
+        current_dag = shared_memory.read::<DirectedAcyclicGraph>()?;
         let node_index = 'x: loop {
             // Try to execute an `Executable` `Node`
             if let Some(i) = current_dag.get_executable_node_index() {
@@ -45,7 +45,7 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
             }
             // Update `dag_in_shm`
             else {
-                thread::sleep(Duration::from_millis(rng.random_range(10..100))); // Sleep if no `Executable` `Node` is available
+                thread::sleep(Duration::from_millis(rng.random_range(10..100))); // Sleep if no executable `Node` is available
                 current_dag = shared_memory.read()?;
             }
         };
@@ -64,40 +64,35 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
         };
 
         // Get indeces of `Node`s that are now executable (due to all their parent nodes having been executed).
-        let mut children_indeces: Vec<NodeIndex> = current_dag.graph.neighbors_directed(node_index, Direction::Outgoing).collect();
-        // Iterate through all child nodes (`child_index`) of `node_index`
-        'x: loop {
-            let child_index = match children_indeces.pop() {
-                Some(i) => i,
-                // If all children's execution status has been updated in shared memory, break loop
-                None => break 'x,
-            };
+        let mut children_indeces: VecDeque<NodeIndex> = current_dag.graph.neighbors_directed(node_index, Direction::Outgoing).collect();
+        // Iterate through all child nodes of `node_index`.
+        while children_indeces.len() > 0 {
+            // Get first `child_index` from queue.
+            let child_index = children_indeces
+                .pop_front()
+                .ok_or(anyhow!("No child index despite queue having more than 0 elements"))?;
 
-            // If all parent nodes (`parent_index`) of `child_index` are executed, then `child_index` is executable
-            if current_dag
-                .graph
-                .neighbors_directed(child_index, Direction::Incoming)
-                .all(|parent_index| current_dag.graph[parent_index].execution_status == ExecutionStatus::Executed)
-            {
-                // Write graph to shared memory
-                current_dag[child_index].execution_status = ExecutionStatus::Executable;
+            // Read graph from shared memory to learn newest execution statuses.
+            current_dag = shared_memory.read::<DirectedAcyclicGraph>()?;
+
+            // If all parent nodes (`parent_index`) of `child_index` are executed, then `child_index` is executable.
+            let mut parent_indeces = current_dag.graph.neighbors_directed(child_index, Direction::Incoming);
+            if parent_indeces.all(|parent_index| current_dag.graph[parent_index].execution_status == ExecutionStatus::Executed) {
+                // Write execution status to shared memory.
+                // Return value must be written immediately back to `current_graph`, because child node may be a parent of another child node.
                 if let Some(new_dag_in_shm) = shared_memory.shm_compare_node_execution_status_and_update(child_index, ExecutionStatus::Executable)? {
-                    // Throw error if execution status was changed to anything but `ExecutionStatus::Executed`
-                    // by some other process. `ExecutionStatus::Executed` is acceptable, as some other parent
-                    // node might have executed in parallel and is also updating its children's indeces.
-                    if new_dag_in_shm[child_index].execution_status != ExecutionStatus::Executed {
-                        return Err(anyhow!(
-                            "Execution status of {:?} changed: {} by another process.",
-                            child_index,
-                            new_dag_in_shm[child_index]
-                        ));
-                    }
+                    current_dag[child_index].execution_status = new_dag_in_shm[child_index].execution_status;
+                } else {
+                    current_dag[child_index].execution_status = ExecutionStatus::Executable;
                 }
+            } else if parent_indeces.all(|parent_index| {
+                current_dag.graph[parent_index].execution_status == ExecutionStatus::Executed
+                    || current_dag.graph[parent_index].execution_status == ExecutionStatus::Executing
+            }) && parent_indeces.clone().count() > 0
+            {
+                // Keep child index in queue to check parent execution status later to make sure node is set to executable.
+                children_indeces.push_back(child_index);
             }
-        }
-
-        for n in current_dag.graph.neighbors_directed(node_index, Direction::Outgoing) {
-            println!("{:?}: {}", n, current_dag[n].execution_status);
         }
     }
 }
