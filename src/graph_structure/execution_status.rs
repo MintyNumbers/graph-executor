@@ -1,11 +1,17 @@
 use anyhow::{anyhow, Error, Result};
 use std::{fmt, str::FromStr};
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy)]
 pub enum ExecutionStatus {
+    /// The associated node's `execute()` method is finished.
     Executed,
+    /// The associated node currently runs its `execute()` method.
     Executing,
+    /// The associated node's `execute()` method is ready to run;
+    /// all its parent nodes have run their respective `execute()` methods.
     Executable,
+    /// The associated node's `execute()` method is not ready to run;
+    /// not all its parent nodes have run their respective `execute()` methods.
     NonExecutable,
 }
 

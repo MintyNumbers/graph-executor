@@ -1,11 +1,19 @@
 use super::execution_status::ExecutionStatus;
 use anyhow::{anyhow, Error, Result};
-use std::{fmt, str::FromStr};
+use rand::Rng;
+use std::{fmt, str::FromStr, thread, time::Duration};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Node {
     // TODO: create an `ExecutableNode` Trait with an `execute` method, i.e. this struct will become obsolete.
     args: String,
+    /// The execution status indicates, whether a node is executable / is currently executing / has already been executed.
+    /// Changes during the `Node`'s lifetime in the following order:
+    ///
+    /// 1. ExecutionStatus::NonExecutable if the node has at least one parent node which hasn't been executed.
+    /// 2. ExecutionStatus::Executable if no parent node hasn't been executed.
+    /// 3. ExecutionStatus::Executing if some process started executing this node.
+    /// 4. ExecutionStatus::Executed if the process has finished executing.
     pub(crate) execution_status: ExecutionStatus,
 }
 
@@ -74,12 +82,15 @@ impl FromStr for Node {
 }
 
 impl Node {
+    /// Executes a node's associated computation (currently: printing `self.args`).
     pub(crate) fn execute(&self) -> Result<()> {
+        let mut rng = rand::rng();
         match self.execution_status {
             ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
             ExecutionStatus::Executable => return Err(anyhow!("Trying to execute node which is not yet set for execution.")),
             ExecutionStatus::NonExecutable => return Err(anyhow!("Trying to execute node which is not executable.")),
             ExecutionStatus::Executing => {
+                thread::sleep(Duration::from_millis(rng.random_range(200..2000))); // Sleep if no executable `Node` is available
                 println!("{}", self.args); // TODO: implement node execution.
                 Ok(())
             }

@@ -5,25 +5,15 @@ use iceoryx2_bb_system_types::file_name::FileName;
 use iceoryx2_cal::{dynamic_storage::DynamicStorage, dynamic_storage::DynamicStorageBuilder, named_concept::NamedConceptBuilder};
 use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
-// Findings:
-// - shared memory closes on scope end; it does not close on Ctrl + C
-// - to keep the mapping alive the associated `Shm` can't be deconstructed
-// - each time i create a new `Shm` it gets a new payload_start_address
-// - creating `Shm` in one process and opening it in another results in an "off" start address
-//   - after each read the offset becomes bigger
-//   - solution: imma just do n `DynamicStorage`s for now
-// - Segmentation fault (core dumped) when trying to cast byte array as `DirectedAcyclicGraph`
-//   - no segfault inside the process which created the graph
-//   - suggests that the graph structure depends on something more (which is not translated into the byte array representation)
-//   - solution: serialization...
-// - `DynamicStorage` uses `Atomic`s due to no method giving an exclusive reference => `Atomic`s' interior mutability is necessary
-// - infinite loop when trying to serialize the RwLock/Mutex after acquiring lock or when trying to acquire non-released lock
-
 pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
-    filename_prefix: String, // Prefix of all storages in shared memory
-    write_lock: Semaphore,   // Write lock, 1: no current writer, 0: currently active writer
-    read_count: Semaphore,   // Number of current readers
-    data_storages: Vec<S>,   // Keep alive so that the storage is not discarded
+    /// Prefix of all shared memory storages in `/dev/shm`
+    filename_prefix: String,
+    /// Write lock, 1: no current writer, 0: currently active writer
+    write_lock: Semaphore,
+    /// Number of current readers
+    read_count: Semaphore,
+    /// Keep alive so that the storage is not discarded
+    data_storages: Vec<S>,
 }
 
 impl<S> std::fmt::Debug for PosixSharedMemory<S>
@@ -38,8 +28,6 @@ where
         )
     }
 }
-
-// TODO: update docs
 
 impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
     /// Create new Iox2ShmMapping with n storages with filename_prefix.
@@ -151,18 +139,22 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
         }
     }
 
+    /// Acquire read lock on shared memory storages.
     pub(crate) fn read_lock(&mut self) -> Result<()> {
         rwlock::read_lock(&self.write_lock, &self.read_count)
     }
 
+    /// Release read lock on shared memory storages.
     pub(crate) fn read_unlock(&mut self) -> Result<()> {
         rwlock::read_unlock(&self.read_count)
     }
 
+    /// Acquire write lock on shared memory storages.
     pub(crate) fn write_lock(&mut self) -> Result<()> {
         rwlock::write_lock(&self.write_lock, &self.read_count)
     }
 
+    /// Release write lock on shared memory storages.
     pub(crate) fn write_unlock(&mut self) -> Result<()> {
         rwlock::write_unlock(&self.write_lock)
     }

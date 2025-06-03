@@ -1,7 +1,5 @@
-use crate::{
-    graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph},
-    shared_memory::posix_shared_memory::PosixSharedMemory,
-};
+use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
+use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use petgraph::graph::NodeIndex;

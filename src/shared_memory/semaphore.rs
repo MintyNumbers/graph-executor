@@ -1,13 +1,5 @@
 use libc::{c_int, c_uint, sem_close, sem_open, sem_post, sem_trywait, sem_unlink, sem_wait, strerror, O_CREAT, O_EXCL, SEM_FAILED, S_IRUSR, S_IWUSR};
-// use serde::{Deserialize, Serialize};
-use std::{
-    ffi::CStr,
-    ffi::CString,
-    // fs::{remove_file, OpenOptions},
-    // os::{fd::AsRawFd, unix::fs::OpenOptionsExt},
-    // ptr, thread,
-    // time::Duration,
-};
+use std::{ffi::CStr, ffi::CString};
 
 #[cfg(target_os = "macos")]
 unsafe fn get_errno() -> i32 {

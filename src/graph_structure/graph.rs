@@ -1,17 +1,13 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
 use anyhow::{anyhow, Error, Ok, Result};
 use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph};
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt,
-    fs::write,
-    ops::{Index, IndexMut},
-    str::FromStr,
-};
+use std::{collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut, str::FromStr};
+
+/// This struct is a wrapper for `petgraph`'s `StableDiGraph` implementation.
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[repr(C)] // Guarantee stable layout across executions
 pub struct DirectedAcyclicGraph {
+    /// `petgraph`'s `StableDiGraph`.
     pub(crate) graph: StableDiGraph<Node, i32>,
 }
 
@@ -165,6 +161,7 @@ impl DirectedAcyclicGraph {
             .find(|i| self.graph[*i].execution_status == ExecutionStatus::Executable)
     }
 
+    /// Checks whether all nodes have been executed.
     pub fn is_graph_executed(&self) -> bool {
         self.graph
             .node_weights()

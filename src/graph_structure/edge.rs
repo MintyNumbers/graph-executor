@@ -3,6 +3,8 @@ use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge {
+    /// Directed edge (connection) between two nodes.
+    /// First index indicates the parent and the second the child node.
     pub(crate) nodes: (usize, usize),
     // pub weight: i32,
 }
