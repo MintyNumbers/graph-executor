@@ -11,12 +11,13 @@ mod shared_memory;
 mod shared_memory_graph;
 
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
-use shared_memory_graph::execute_graph;
+use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
+use std::sync::atomic::AtomicU8;
 
 /// Main function.
 fn main() -> anyhow::Result<()> {
     let filename_prefix = "mystorage".to_string();
-    let dag = DirectedAcyclicGraph::new(
+    let mut dag = DirectedAcyclicGraph::new(
         vec![
             (0, Node::new(String::from("-- Node 0 was just executed --"))),
             (1, Node::new(String::from("-- Node 1 was just executed --"))),
@@ -38,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     // Execute defined graph
-    execute_graph::execute_graph(filename_prefix, dag)?;
+    dag.execute_graph::<Storage<AtomicU8>>(filename_prefix)?;
 
     Ok(())
 }
