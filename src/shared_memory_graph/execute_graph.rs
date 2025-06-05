@@ -1,7 +1,9 @@
+use crate::graph_structure::node::Node;
 use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
 use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
+use petgraph::stable_graph::Neighbors;
 use petgraph::{graph::NodeIndex, Direction};
 use rand::Rng;
 use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
@@ -75,9 +77,26 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
             // Read graph from shared memory to learn newest execution statuses.
             current_dag = shared_memory.read::<DirectedAcyclicGraph>()?;
 
-            // If all parent nodes (`parent_index`) of `child_index` are executed, then `child_index` is executable.
+            // Determine whether all parent nodes of child node are executed or executing
             let mut parent_indeces = current_dag.graph.neighbors_directed(child_index, Direction::Incoming);
-            if parent_indeces.all(|parent_index| current_dag.graph[parent_index].execution_status == ExecutionStatus::Executed) {
+            let (all_executed, all_executed_or_executing) = {
+                let (mut all_executed, mut all_executed_or_executing) = (true, true);
+                for p in parent_indeces.clone() {
+                    // If some node is executing, then not all parent nodes are executed
+                    if current_dag[p].execution_status == ExecutionStatus::Executing {
+                        all_executed = false;
+                    }
+                    // If some node is neither executed nor executing, then not all parent nodes are executed or executing
+                    else if current_dag[p].execution_status != ExecutionStatus::Executed && current_dag[p].execution_status != ExecutionStatus::Executing {
+                        (all_executed, all_executed_or_executing) = (false, false);
+                        break;
+                    }
+                }
+                (all_executed, all_executed_or_executing)
+            };
+
+            // If all parent nodes (`parent_index`) of `child_index` are executed, then `child_index` is executable.
+            if all_executed {
                 // Write execution status to shared memory.
                 // Return value must be written immediately back to `current_graph`, because child node may be a parent of another child node.
                 if let Some(new_dag_in_shm) = shared_memory.shm_compare_node_execution_status_and_update(child_index, ExecutionStatus::Executable)? {
@@ -85,11 +104,7 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
                 } else {
                     current_dag[child_index].execution_status = ExecutionStatus::Executable;
                 }
-            } else if parent_indeces.all(|parent_index| {
-                current_dag.graph[parent_index].execution_status == ExecutionStatus::Executed
-                    || current_dag.graph[parent_index].execution_status == ExecutionStatus::Executing
-            }) && parent_indeces.clone().count() > 0
-            {
+            } else if all_executed_or_executing {
                 // Keep child index in queue to check parent execution status later to make sure node is set to executable.
                 children_indeces.push_back(child_index);
             }
