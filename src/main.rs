@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_mut, unused_variables)]
+#![allow(dead_code)]
 
 //! Proof-of concept implementation of a graph executor component that is executed in a topological order.
 //! The graph is represented as a directed acyclic graph (DAG) where each node is executed once and the edges
@@ -10,27 +10,11 @@ mod graph_structure;
 mod shared_memory;
 mod shared_memory_graph;
 
-use crate::graph_structure::graph::DirectedAcyclicGraph;
-use graph_structure::{edge::Edge, node::Node};
-use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use shared_memory::posix_shared_memory::PosixSharedMemory;
+use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
 use shared_memory_graph::execute_graph;
-use std::sync::atomic::AtomicU8;
 
 /// Main function.
 fn main() -> anyhow::Result<()> {
-    // Collect command line arguments
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} < process_number: 1 | 2 | 3 >", args[0]);
-        std::process::exit(1);
-    }
-    let process_number: u32 = args[1].parse().unwrap_or_else(|_| {
-        eprintln!("Invalid process number: {}", args[1]);
-        std::process::exit(1);
-    });
-
-    // Different
     let filename_prefix = "mystorage".to_string();
     let dag = DirectedAcyclicGraph::new(
         vec![
@@ -52,49 +36,9 @@ fn main() -> anyhow::Result<()> {
             Edge::new((5, 6)),
         ],
     )?;
-    match process_number {
-        // Process 1
-        1 => {
-            let mut shm_mapping = PosixSharedMemory::<Storage<AtomicU8>>::new(&filename_prefix, &dag)?;
-            // println!("Initial write complete: {} {}", shm_mapping.data_storages.len(), dag);
-            std::thread::sleep(std::time::Duration::from_secs(5));
 
-            // dag.graph.add_node(Node::new("Dynamically added new node".to_string()));
-            // shm_mapping.write(&dag)?;
-            // println!("Changed...");
-            // std::thread::sleep(std::time::Duration::from_secs(5));
-
-            let _data = shm_mapping.read::<DirectedAcyclicGraph>()?;
-            // println!("data: {}, {}", shm_mapping.data_storages.len(), data);
-
-            println!("Process 1 executed");
-        }
-        // Process 2
-        2 => {
-            let (mut shm_mapping_2, mut data) = PosixSharedMemory::<Storage<AtomicU8>>::open::<DirectedAcyclicGraph>(&filename_prefix)?;
-            // println!("Data from shm: {} {}", shm_mapping_2.data_storages.len(), data);
-
-            // for i in 0..50 {
-            //     data = shm_mapping_2.read()?;
-            //     println!("{}", data);
-            //     std::thread::sleep(std::time::Duration::from_secs(1));
-            // }
-
-            data.graph.add_node(Node::new("ahahhahahha".to_string()));
-            shm_mapping_2.write(&data)?;
-            // println!("New data: {}, {}", shm_mapping_2.data_storages.len(), data);
-            std::thread::sleep(std::time::Duration::from_secs(6));
-
-            println!("Process 2 executed");
-        }
-        3 => {
-            execute_graph::execute_graph(filename_prefix, dag)?;
-        }
-        _ => {
-            eprintln!("Invalid process number: {}", process_number);
-            std::process::exit(1);
-        }
-    }
+    // Execute defined graph
+    execute_graph::execute_graph(filename_prefix, dag)?;
 
     Ok(())
 }

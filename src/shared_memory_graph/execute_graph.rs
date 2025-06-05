@@ -1,9 +1,7 @@
-use crate::graph_structure::node::Node;
 use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
 use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use petgraph::stable_graph::Neighbors;
 use petgraph::{graph::NodeIndex, Direction};
 use rand::Rng;
 use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
@@ -77,11 +75,10 @@ pub fn execute_graph(filename_prefix: String, initial_dag: DirectedAcyclicGraph)
             // Read graph from shared memory to learn newest execution statuses.
             current_dag = shared_memory.read::<DirectedAcyclicGraph>()?;
 
-            // Determine whether all parent nodes of child node are executed or executing
-            let mut parent_indeces = current_dag.graph.neighbors_directed(child_index, Direction::Incoming);
+            // Determine whether all parent nodes `p` of child node are executed or executing
             let (all_executed, all_executed_or_executing) = {
                 let (mut all_executed, mut all_executed_or_executing) = (true, true);
-                for p in parent_indeces.clone() {
+                for p in current_dag.graph.neighbors_directed(child_index, Direction::Incoming) {
                     // If some node is executing, then not all parent nodes are executed
                     if current_dag[p].execution_status == ExecutionStatus::Executing {
                         all_executed = false;
