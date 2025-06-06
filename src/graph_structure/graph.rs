@@ -83,10 +83,10 @@ impl FromStr for DirectedAcyclicGraph {
                     && line_split_space[4] == "]"
                 // ]
                 {
-                    edges.push(Edge::new((
+                    edges.push(Edge::new(
                         line_split_space[0].to_string(),
                         line_split_space[2].to_string(),
-                    )));
+                    ));
                 }
                 // Parse line as `Edge` and `Node` if it looks like the compact DOT syntax:
                 // a -> b -> c;
@@ -106,10 +106,10 @@ impl FromStr for DirectedAcyclicGraph {
                         }
                         // Insert edge
                         if node_num >= 1 {
-                            edges.push(Edge::new((
+                            edges.push(Edge::new(
                                 line_split_arrow[node_num - 1].to_string(),
                                 line_split_arrow[node_num].to_string(),
-                            )));
+                            ));
                         }
                     }
                 }
@@ -175,17 +175,17 @@ impl DirectedAcyclicGraph {
 
         // Populate graph with all edges between nodes.
         edges.into_iter().for_each(|edge| {
-            if node_string_id_to_node_index_map.contains_key(&edge.nodes.0)
-                && node_string_id_to_node_index_map.contains_key(&edge.nodes.1)
+            if node_string_id_to_node_index_map.contains_key(&edge.parent)
+                && node_string_id_to_node_index_map.contains_key(&edge.child)
             {
                 graph.add_edge(
-                    node_string_id_to_node_index_map[&edge.nodes.0],
-                    node_string_id_to_node_index_map[&edge.nodes.1],
+                    node_string_id_to_node_index_map[&edge.parent],
+                    node_string_id_to_node_index_map[&edge.child],
                     1,
                 );
 
                 // Set `ExecutionStatus` of child nodes to `NonExecutable`.
-                graph[node_string_id_to_node_index_map[&edge.nodes.1]].execution_status =
+                graph[node_string_id_to_node_index_map[&edge.child]].execution_status =
                     ExecutionStatus::NonExecutable;
             } else {
                 println!(

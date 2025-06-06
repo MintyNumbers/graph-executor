@@ -24,7 +24,7 @@ mod tests {
                     Node::new(String::from("Node 1 was just executed")),
                 ),
             ]),
-            vec![Edge::new((String::from("0"), String::from("1")))],
+            vec![Edge::new(String::from("0"), String::from("1"))],
         )?;
 
         let bytes = rmp_serde::to_vec(&graph_new)?;

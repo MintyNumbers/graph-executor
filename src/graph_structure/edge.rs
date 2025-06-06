@@ -5,15 +5,17 @@ use std::str::FromStr;
 pub struct Edge {
     /// Directed edge (connection) between two nodes.
     /// First index indicates the parent and the second the child node.
-    pub(crate) nodes: (String, String),
+    pub(crate) parent: String,
+    pub(crate) child: String,
     // pub weight: i32,
 }
 
 impl Edge {
     /// Creates new `Edge` from two node indeces returned by `StableDiGraph` when adding `Node`s.
-    pub fn new(nodes: (String, String) /* , weight: i32 */) -> Self {
+    pub fn new(parent: String, child: String /* , weight: i32 */) -> Self {
         Edge {
-            nodes: (nodes.0, nodes.1),
+            parent,
+            child,
             // weight: weight,
         }
     }
@@ -39,20 +41,18 @@ impl FromStr for Edge {
         .collect();
 
         Ok(Edge {
-            nodes: (
-                parts
-                    .get(0)
-                    .ok_or(anyhow!(
-                        "Edge::from_str parsing error: Could not find first node index."
-                    ))?
-                    .to_string(),
-                parts
-                    .get(1)
-                    .ok_or(anyhow!(
-                        "Edge::from_str parsing error: Could not find second node index."
-                    ))?
-                    .to_string(),
-            ),
+            parent: parts
+                .get(0)
+                .ok_or(anyhow!(
+                    "Edge::from_str parsing error: Could not find first node index."
+                ))?
+                .to_string(),
+            child: parts
+                .get(1)
+                .ok_or(anyhow!(
+                    "Edge::from_str parsing error: Could not find second node index."
+                ))?
+                .to_string(),
             // weight: 1,
         })
     }

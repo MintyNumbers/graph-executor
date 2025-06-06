@@ -21,9 +21,10 @@ mod tests {
     fn edge_compare_equality_from_str_direct_new() {
         let edge_from_str = Edge::from_str("0 -> 1 [ ]").unwrap();
         let edge_direct = Edge {
-            nodes: (String::from("0"), String::from("1")),
+            parent: String::from("0"),
+            child: String::from("1"),
         };
-        let edge_new = Edge::new((String::from("0"), String::from("1")));
+        let edge_new = Edge::new(String::from("0"), String::from("1"));
 
         assert_eq!(
             edge_from_str, edge_direct,
@@ -136,9 +137,9 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("2"), String::from("3"))),
-                Edge::new((String::from("1"), String::from("3"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("2"), String::from("3")),
+                Edge::new(String::from("1"), String::from("3")),
             ],
         )
         .unwrap();
@@ -200,13 +201,13 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("1"), String::from("3"))),
-                Edge::new((String::from("4"), String::from("3"))),
-                Edge::new((String::from("2"), String::from("4"))),
-                Edge::new((String::from("6"), String::from("3"))),
-                Edge::new((String::from("5"), String::from("4"))),
-                Edge::new((String::from("5"), String::from("6"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("1"), String::from("3")),
+                Edge::new(String::from("4"), String::from("3")),
+                Edge::new(String::from("2"), String::from("4")),
+                Edge::new(String::from("6"), String::from("3")),
+                Edge::new(String::from("5"), String::from("4")),
+                Edge::new(String::from("5"), String::from("6")),
             ],
         )
         .unwrap();
@@ -227,9 +228,9 @@ mod tests {
                 (String::from("d"), Node::new("d".to_string())),
             ]),
             vec![
-                Edge::new((String::from("a"), String::from("b"))),
-                Edge::new((String::from("b"), String::from("c"))),
-                Edge::new((String::from("b"), String::from("d"))),
+                Edge::new(String::from("a"), String::from("b")),
+                Edge::new(String::from("b"), String::from("c")),
+                Edge::new(String::from("b"), String::from("d")),
             ],
         )
         .unwrap();
@@ -261,9 +262,9 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("2"), String::from("3"))),
-                Edge::new((String::from("1"), String::from("3"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("2"), String::from("3")),
+                Edge::new(String::from("1"), String::from("3")),
             ],
         )
         .unwrap();
@@ -291,8 +292,8 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("1"), String::from("0"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("1"), String::from("0")),
             ],
         )
         .unwrap_err();
@@ -326,9 +327,9 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("2"), String::from("3"))),
-                Edge::new((String::from("1"), String::from("3"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("2"), String::from("3")),
+                Edge::new(String::from("1"), String::from("3")),
             ],
         )
         .unwrap();

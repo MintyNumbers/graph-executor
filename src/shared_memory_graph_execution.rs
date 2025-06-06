@@ -29,9 +29,9 @@ mod tests {
                 ),
             ]),
             vec![
-                Edge::new((String::from("0"), String::from("1"))),
-                Edge::new((String::from("2"), String::from("3"))),
-                Edge::new((String::from("1"), String::from("3"))),
+                Edge::new(String::from("0"), String::from("1")),
+                Edge::new(String::from("2"), String::from("3")),
+                Edge::new(String::from("1"), String::from("3")),
             ],
         )
         .unwrap();
