@@ -1,6 +1,6 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
 use anyhow::{anyhow, Error, Ok, Result};
-use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph};
+use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, stable_graph::Neighbors, Direction};
 use std::{collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut, str::FromStr};
 
 /// This struct is a wrapper for `petgraph`'s `StableDiGraph` implementation.
@@ -8,7 +8,7 @@ use std::{collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Inde
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DirectedAcyclicGraph {
     /// `petgraph`'s `StableDiGraph`.
-    pub(crate) graph: StableDiGraph<Node, i32>,
+    graph: StableDiGraph<Node, i32>,
 }
 
 impl fmt::Display for DirectedAcyclicGraph {
@@ -168,5 +168,13 @@ impl DirectedAcyclicGraph {
             .filter_map(|n| if n.execution_status == ExecutionStatus::Executed { None } else { Some(n) })
             .collect::<Vec<&Node>>()
             .is_empty()
+    }
+
+    pub fn get_parent_node_indeces(&self, index: NodeIndex) -> Neighbors<'_, i32> {
+        self.graph.neighbors_directed(index, Direction::Incoming)
+    }
+
+    pub fn get_child_node_indeces(&self, index: NodeIndex) -> Neighbors<'_, i32> {
+        self.graph.neighbors_directed(index, Direction::Outgoing)
     }
 }

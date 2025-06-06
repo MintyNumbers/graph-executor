@@ -2,7 +2,7 @@ use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedA
 use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::DynamicStorage;
-use petgraph::{graph::NodeIndex, Direction};
+use petgraph::graph::NodeIndex;
 use rand::Rng;
 use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
 
@@ -64,7 +64,7 @@ impl DirectedAcyclicGraph {
             };
 
             // Get indeces of `Node`s that are now executable (due to all their parent nodes having been executed).
-            let mut children_indeces: VecDeque<NodeIndex> = self.graph.neighbors_directed(node_index, Direction::Outgoing).collect();
+            let mut children_indeces: VecDeque<NodeIndex> = self.get_child_node_indeces(node_index).collect();
             // Iterate through all child nodes of `node_index`.
             while children_indeces.len() > 0 {
                 // Get first `child_index` from queue.
@@ -78,7 +78,7 @@ impl DirectedAcyclicGraph {
                 // Determine whether all parent nodes `p` of child node are executed or executing
                 let (all_executed, all_executed_or_executing) = {
                     let (mut all_executed, mut all_executed_or_executing) = (true, true);
-                    for p in self.graph.neighbors_directed(child_index, Direction::Incoming) {
+                    for p in self.get_parent_node_indeces(child_index) {
                         // If some node is executing, then not all parent nodes are executed
                         if self[p].execution_status == ExecutionStatus::Executing {
                             all_executed = false;

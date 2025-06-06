@@ -147,4 +147,48 @@ mod tests {
             "`DAG.get_executable_node_indeces()` method does not return correct node indeces."
         );
     }
+
+    #[test]
+    fn dag_fail_directed_cyclic_graph() {
+        let err = DirectedAcyclicGraph::new(
+            vec![
+                (0, Node::new(String::from("Node 0 was just executed"))),
+                (1, Node::new(String::from("Node 1 was just executed"))),
+            ],
+            vec![Edge::new((0, 1)), Edge::new((1, 0))],
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            format!("Cyclic graph supplied on NodeIndex(1)"),
+            "Cyclic graph is successfully created (it shouldn't be)."
+        );
+    }
+
+    #[test]
+    fn dag_get_parent_child_node_indeces() {
+        let graph = DirectedAcyclicGraph::new(
+            vec![
+                (0, Node::new(String::from("Node 0 was just executed"))),
+                (1, Node::new(String::from("Node 1 was just executed"))),
+                (2, Node::new(String::from("Node 2 was just executed"))),
+                (3, Node::new(String::from("Node 3 was just executed"))),
+            ],
+            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
+        )
+        .unwrap();
+
+        let parents = graph.get_parent_node_indeces(NodeIndex::new(3)).collect::<Vec<NodeIndex>>();
+        assert_eq!(parents, Vec::from([NodeIndex::new(1), NodeIndex::new(2)]), "Wrong parents of Node 3.");
+
+        let parents = graph.get_parent_node_indeces(NodeIndex::new(2)).collect::<Vec<NodeIndex>>();
+        assert_eq!(parents, Vec::new(), "Wrong parents of Node 2.");
+
+        let children = graph.get_child_node_indeces(NodeIndex::new(2)).collect::<Vec<NodeIndex>>();
+        assert_eq!(children, Vec::from([NodeIndex::new(3)]), "Wrong children of Node 2.");
+
+        let children = graph.get_child_node_indeces(NodeIndex::new(1)).collect::<Vec<NodeIndex>>();
+        assert_eq!(children, Vec::from([NodeIndex::new(3)]), "Wrong children of Node 1.");
+    }
 }

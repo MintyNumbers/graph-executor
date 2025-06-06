@@ -8,7 +8,7 @@ mod tests {
     use std::sync::atomic::AtomicU8;
 
     #[test]
-    fn dag_method_execute_nodes() {
+    fn dag_method_execute_nodes_one_process() {
         let mut dag = DirectedAcyclicGraph::new(
             vec![
                 (0, Node::new(String::from("Node 0 was just executed"))),
