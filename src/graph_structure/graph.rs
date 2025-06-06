@@ -5,8 +5,8 @@ use petgraph::{
     Direction,
 };
 use std::{
-    collections::BTreeMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut,
-    str::FromStr,
+    collections::BTreeMap, collections::VecDeque, fmt, fs::read_to_string, fs::write, ops::Index,
+    ops::IndexMut, str::FromStr,
 };
 
 /// This struct is a wrapper for `petgraph`'s `StableDiGraph` implementation.
@@ -199,6 +199,13 @@ impl DirectedAcyclicGraph {
         Acyclic::try_from_graph(&graph)
             .map_err(|e| anyhow!("Cyclic graph supplied on {:?}", e.node_id()))?;
         Ok(DirectedAcyclicGraph { graph: graph })
+    }
+
+    pub fn from_file(digraph_file: &str) -> Result<Self> {
+        Ok(DirectedAcyclicGraph::from_str(
+            &read_to_string(digraph_file)
+                .map_err(|e| anyhow!("Failed reading file {}: {}", digraph_file, e))?,
+        )?)
     }
 
     /// Write `DirectedAcyclicGraph` to `path`.

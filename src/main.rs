@@ -13,7 +13,7 @@ mod shared_memory_graph_execution;
 use anyhow::anyhow;
 use graph_structure::graph::DirectedAcyclicGraph;
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use std::{fs::read_to_string, str::FromStr, sync::atomic::AtomicU8};
+use std::sync::atomic::AtomicU8;
 
 /// Main function.
 fn main() -> anyhow::Result<()> {
@@ -30,11 +30,8 @@ fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("Invalid filename suffix {}: {}", args[2], e))?;
 
     // Read digraph from file and execute it
-    let mut dag = DirectedAcyclicGraph::from_str(
-        &read_to_string(&digraph_file)
-            .map_err(|e| anyhow!("Failed reading file {}: {}", digraph_file, e))?,
-    )?;
-    dag.execute_graph::<Storage<AtomicU8>>(filename_suffix)?;
+    DirectedAcyclicGraph::from_file(&digraph_file)?
+        .execute_graph::<Storage<AtomicU8>>(filename_suffix)?;
 
     Ok(())
 }
