@@ -39,10 +39,10 @@ mod tests {
     #[test]
     fn rwlock() -> Result<()> {
         // Create RwLock
-        let filename_prefix = "cargo_test";
-        let write_lock = Semaphore::create(&format!("/{}_write_lock_write", filename_prefix), 1)
+        let filename_suffix = "cargo_test";
+        let write_lock = Semaphore::create(&format!("/{}_write_lock_write", filename_suffix), 1)
             .map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
-        let read_count = Semaphore::create(&format!("/{}_read_count_write", filename_prefix), 0)
+        let read_count = Semaphore::create(&format!("/{}_read_count_write", filename_suffix), 0)
             .map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
         assert_eq!(
             write_lock

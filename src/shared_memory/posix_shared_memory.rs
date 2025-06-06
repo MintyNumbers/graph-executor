@@ -9,8 +9,8 @@ use iceoryx2_cal::{
 use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
 pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
-    /// Prefix of all shared memory storages in `/dev/shm`
-    filename_prefix: String,
+    /// Suffix of all shared memory storages in `/dev/shm`
+    filename_suffix: String,
     /// Write lock, 1: no current writer, 0: currently active writer
     write_lock: Semaphore,
     /// Number of current readers
@@ -26,25 +26,25 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Iox2ShmMapping: {{filename_prefix: {:?}, write_lock: {:?}, read_count: {:?}, data_storages: {:?}}}",
-            self.filename_prefix, self.write_lock, self.read_count, self.data_storages
+            "Iox2ShmMapping: {{filename_suffix: {:?}, write_lock: {:?}, read_count: {:?}, data_storages: {:?}}}",
+            self.filename_suffix, self.write_lock, self.read_count, self.data_storages
         )
     }
 }
 
 impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
-    /// Create new Iox2ShmMapping with n storages with filename_prefix.
-    pub fn new(filename_prefix: &str, data: impl serde::Serialize + Debug) -> Result<Self> {
-        let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
+    /// Create new Iox2ShmMapping with n storages with filename_suffix.
+    pub fn new(filename_suffix: &str, data: impl serde::Serialize + Debug) -> Result<Self> {
+        let filename_suffix = filename_suffix.replace("/", "_"); // Handle slash in filename
 
         // Create RwLock, construct shared memory mapping
-        let write_lock = Semaphore::create(&format!("/{}_write_lock", filename_prefix), 1)
+        let write_lock = Semaphore::create(&format!("/{}_write_lock", filename_suffix), 1)
             .map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
-        let read_count = Semaphore::create(&format!("/{}_read_count", filename_prefix), 0)
+        let read_count = Semaphore::create(&format!("/{}_read_count", filename_suffix), 0)
             .map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
 
         let mut shm_mapping = PosixSharedMemory {
-            filename_prefix,
+            filename_suffix: filename_suffix,
             write_lock,
             read_count,
             data_storages: vec![],
@@ -56,18 +56,18 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
         Ok(shm_mapping)
     }
 
-    /// Create Iox2ShmMapping from storages with filename_prefix that already exist in shared memory.
-    pub fn open<T: serde::de::DeserializeOwned>(filename_prefix: &str) -> Result<(Self, T)> {
-        let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
+    /// Create Iox2ShmMapping from storages with filename_suffix that already exist in shared memory.
+    pub fn open<T: serde::de::DeserializeOwned>(filename_suffix: &str) -> Result<(Self, T)> {
+        let filename_suffix = filename_suffix.replace("/", "_"); // Handle slash in filename
 
         // Read semaphores from shared memory, construct shared memory mapping
-        let write_lock = Semaphore::open(&format!("/{}_write_lock", filename_prefix))
+        let write_lock = Semaphore::open(&format!("/{}_write_lock", filename_suffix))
             .map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
-        let read_count = Semaphore::open(&format!("/{}_read_count", filename_prefix))
+        let read_count = Semaphore::open(&format!("/{}_read_count", filename_suffix))
             .map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
 
         let mut shm_mapping = PosixSharedMemory {
-            filename_prefix,
+            filename_suffix: filename_suffix,
             write_lock,
             read_count,
             data_storages: vec![],
@@ -104,7 +104,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
     }
 
     /// Acquire write lock and write `data` to shared memory.
-    /// Storages are defined by `self.filename_prefix` and new storages are created if necessary / old storages are deleted if no longer necessary.
+    /// Storages are defined by `self.filename_suffix` and new storages are created if necessary / old storages are deleted if no longer necessary.
     pub fn write<T: serde::Serialize>(&mut self, data: &T) -> Result<()> {
         // Acquire write lock
         self.write_lock()?;
@@ -168,7 +168,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
         rwlock::write_unlock(&self.write_lock)
     }
 
-    /// Returns `data_bytes` from storages defined by `filename_prefix` and writes `data_storages` to `self`.
+    /// Returns `data_bytes` from storages defined by `filename_suffix` and writes `data_storages` to `self`.
     pub(crate) fn read_from_shm(&mut self) -> Result<Vec<u8>> {
         let mut bytes = vec![];
 
@@ -180,7 +180,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 Some(storage) => bytes.push(storage.get().load(Ordering::Relaxed)),
                 None => {
                     let storage_name: FileName =
-                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                        FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
                     match S::Builder::new(&storage_name).open() {
                         Err(e) => panic!("Failed to open existing DynamicStorage: {:?}", e),
                         Ok(s) => {
@@ -201,7 +201,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 // Construct new storages if there are more allocated in shared memory/to match total_buf_len
                 None => {
                     let storage_name: FileName =
-                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                        FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
                     match S::Builder::new(&storage_name).open() {
                         Err(e) => panic!(
                             "Failed to open existing DynamicStorage {}: {:?}",
@@ -251,7 +251,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 // Create new storages if data to be written requires more space than currently allocated
                 None => {
                     let storage_name: FileName =
-                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                        FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
                     let storage = S::Builder::new(&storage_name)
                         .create(AtomicU8::new(0))
                         .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?;

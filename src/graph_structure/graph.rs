@@ -54,10 +54,10 @@ impl FromStr for DirectedAcyclicGraph {
                     ));
                 }
                 // If a line looks like "0 -> 1 [ ]" parse it as an `Edge`.
-                else if split_line[0].trim().chars().all(|c| c.is_ascii_digit())
-                    && split_line[1].trim() == "->"
-                    && split_line[2].trim().chars().all(|c| c.is_ascii_digit())
-                    && split_line[3].trim() == "["
+                else if split_line[0].trim().chars().all(|c| c.is_ascii_digit()) // 0
+                    && split_line[1].trim() == "->"                                    // ->
+                    && split_line[2].trim().chars().all(|c| c.is_ascii_digit())  // 1
+                    && split_line[3].trim() == "["                                     // [ ]
                 {
                     edges.push(Edge::new((
                         split_line[0].trim().parse::<usize>()?,
@@ -117,12 +117,9 @@ impl DirectedAcyclicGraph {
     /// ```
     pub fn new(nodes: Vec<(usize, Node)>, edges: Vec<Edge>) -> Result<Self> {
         let mut graph = StableDiGraph::<Node, i32>::new();
-        let mut node_indeces = HashMap::new();
 
-        // Populate graph with nodes.
-        nodes.into_iter().for_each(|(i, node)| {
-            node_indeces.insert(i, graph.add_node(node));
-        });
+        let node_indeces: HashMap<usize, NodeIndex> =
+            HashMap::from_iter(nodes.into_iter().map(|(i, node)| (i, graph.add_node(node))));
 
         // Populate graph with all edges between nodes.
         edges.into_iter().for_each(|edge| {

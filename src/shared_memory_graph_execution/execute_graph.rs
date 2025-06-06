@@ -10,21 +10,21 @@ impl DirectedAcyclicGraph {
     /// Execute graph stored in shared memory mapping.
     pub fn execute_graph<S: DynamicStorage<AtomicU8>>(
         &mut self,
-        filename_prefix: String,
+        filename_suffix: String,
     ) -> Result<()> {
         // Create/open shared memory mapping for `graph`.
-        let mut shared_memory = match PosixSharedMemory::<S>::new(&filename_prefix, &self) {
+        let mut shared_memory = match PosixSharedMemory::<S>::new(&filename_suffix, &self) {
             Ok(shared_memory) => shared_memory,
             Err(e) => {
                 if e.to_string()
                     == format!(
                         "Failed to create write_lock: Failed to create semaphore /{}_write_lock: File exists (errno: 17)",
-                        &filename_prefix
+                        &filename_suffix
                     )
                 {
-                    PosixSharedMemory::<S>::open::<DirectedAcyclicGraph>(&filename_prefix)?.0
+                    PosixSharedMemory::<S>::open::<DirectedAcyclicGraph>(&filename_suffix)?.0
                 } else {
-                    Err(anyhow!("Failed to create shared memory {}: {}", &filename_prefix, e))?
+                    Err(anyhow!("Failed to create shared memory {}: {}", &filename_suffix, e))?
                 }
             }
         };
