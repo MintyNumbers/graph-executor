@@ -3,7 +3,6 @@ use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
 use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use petgraph::graph::NodeIndex;
-use rand::Rng;
 use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
 
 impl DirectedAcyclicGraph {
@@ -29,7 +28,6 @@ impl DirectedAcyclicGraph {
             }
         };
 
-        let mut rng = rand::rng();
         loop {
             // Get an executable `Node`, set `execution_status` for `node_index` to `ExecutionStatus::Executing` and execute associated `Node`.
             // If no executable `Node` is available or the chosen `Node` is already being executed by another process sleep for 10ms.
@@ -51,7 +49,7 @@ impl DirectedAcyclicGraph {
                 }
                 // Update `dag_in_shm`
                 else {
-                    thread::sleep(Duration::from_millis(rng.random_range(10..100))); // Sleep if no executable `Node` is available
+                    thread::sleep(Duration::from_millis(10)); // Sleep if no executable `Node` is available
                     *self = shared_memory.read()?;
                 }
             };
