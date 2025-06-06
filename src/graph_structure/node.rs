@@ -1,6 +1,5 @@
 use super::execution_status::ExecutionStatus;
 use anyhow::{anyhow, Error, Result};
-use rand::Rng;
 use std::{fmt, str::FromStr, thread, time::Duration};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -84,13 +83,12 @@ impl FromStr for Node {
 impl Node {
     /// Executes a node's associated computation (currently: printing `self.args`).
     pub(crate) fn execute(&self) -> Result<()> {
-        let mut rng = rand::rng();
         match self.execution_status {
             ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
             ExecutionStatus::Executable => return Err(anyhow!("Trying to execute node which is not yet set for execution.")),
             ExecutionStatus::NonExecutable => return Err(anyhow!("Trying to execute node which is not executable.")),
             ExecutionStatus::Executing => {
-                thread::sleep(Duration::from_millis(rng.random_range(200..2000))); // Sleep if no executable `Node` is available
+                thread::sleep(Duration::from_secs(1)); // Sleep if no executable `Node` is available
                 println!("{}", self.args); // TODO: implement node execution.
                 Ok(())
             }
