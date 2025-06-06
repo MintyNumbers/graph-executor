@@ -8,7 +8,7 @@
 
 mod graph_structure;
 mod shared_memory;
-mod shared_memory_graph;
+mod shared_memory_graph_execution;
 
 use graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
 use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
