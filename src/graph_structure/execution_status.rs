@@ -45,7 +45,9 @@ impl FromStr for ExecutionStatus {
             "Executing" => Ok(ExecutionStatus::Executing),
             "Executable" => Ok(ExecutionStatus::Executable),
             "NonExecutable" => Ok(ExecutionStatus::NonExecutable),
-            _ => Err(anyhow!("ExecutionStatus::from_str parsing error: Invalid execution status.")),
+            _ => Err(anyhow!(
+                "ExecutionStatus::from_str parsing error: Invalid execution status."
+            )),
         }
     }
 }

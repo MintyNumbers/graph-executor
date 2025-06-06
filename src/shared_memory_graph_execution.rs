@@ -19,8 +19,13 @@ mod tests {
             vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
-        dag.execute_graph::<Storage<AtomicU8>>(String::from("test_shared_memory")).unwrap();
+        dag.execute_graph::<Storage<AtomicU8>>(String::from("test_shared_memory"))
+            .unwrap();
 
-        assert_eq!(dag.is_graph_executed(), true, "`shm.execute_graph()` method does not execute all `Node`s.");
+        assert_eq!(
+            dag.is_graph_executed(),
+            true,
+            "`shm.execute_graph()` method does not execute all `Node`s."
+        );
     }
 }

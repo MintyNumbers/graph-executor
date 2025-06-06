@@ -2,7 +2,10 @@ use super::{rwlock, semaphore::Semaphore};
 use anyhow::{anyhow, Result};
 use iceoryx2_bb_container::semantic_string::SemanticString;
 use iceoryx2_bb_system_types::file_name::FileName;
-use iceoryx2_cal::{dynamic_storage::DynamicStorage, dynamic_storage::DynamicStorageBuilder, named_concept::NamedConceptBuilder};
+use iceoryx2_cal::{
+    dynamic_storage::DynamicStorage, dynamic_storage::DynamicStorageBuilder,
+    named_concept::NamedConceptBuilder,
+};
 use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
 pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
@@ -35,8 +38,10 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
         let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
 
         // Create RwLock, construct shared memory mapping
-        let write_lock = Semaphore::create(&format!("/{}_write_lock", filename_prefix), 1).map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
-        let read_count = Semaphore::create(&format!("/{}_read_count", filename_prefix), 0).map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
+        let write_lock = Semaphore::create(&format!("/{}_write_lock", filename_prefix), 1)
+            .map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
+        let read_count = Semaphore::create(&format!("/{}_read_count", filename_prefix), 0)
+            .map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
 
         let mut shm_mapping = PosixSharedMemory {
             filename_prefix,
@@ -56,8 +61,10 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
         let filename_prefix = filename_prefix.replace("/", "_"); // Handle slash in filename
 
         // Read semaphores from shared memory, construct shared memory mapping
-        let write_lock = Semaphore::open(&format!("/{}_write_lock", filename_prefix)).map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
-        let read_count = Semaphore::open(&format!("/{}_read_count", filename_prefix)).map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
+        let write_lock = Semaphore::open(&format!("/{}_write_lock", filename_prefix))
+            .map_err(|e| anyhow!("Failed to open write_lock: {}", e))?;
+        let read_count = Semaphore::open(&format!("/{}_read_count", filename_prefix))
+            .map_err(|e| anyhow!("Failed to open read_count: {}", e))?;
 
         let mut shm_mapping = PosixSharedMemory {
             filename_prefix,
@@ -113,7 +120,9 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
 
     /// Acquire write lock, write `data_write` to shared memory if `data_condition` is equal to current data in shared memory.
     /// If `data_condition` is not equal to the data in shared memory, then return the data in shared memory.
-    pub fn shm_compare_data_and_swap<T: serde::Serialize + serde::de::DeserializeOwned + PartialEq>(
+    pub fn shm_compare_data_and_swap<
+        T: serde::Serialize + serde::de::DeserializeOwned + PartialEq,
+    >(
         &mut self,
         data_equal_to_shm: &T,
         data_write: &T,
@@ -170,7 +179,8 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 // Read storages from `self`
                 Some(storage) => bytes.push(storage.get().load(Ordering::Relaxed)),
                 None => {
-                    let storage_name: FileName = FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                    let storage_name: FileName =
+                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
                     match S::Builder::new(&storage_name).open() {
                         Err(e) => panic!("Failed to open existing DynamicStorage: {:?}", e),
                         Ok(s) => {
@@ -190,9 +200,13 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 Some(storage) => bytes.push(storage.get().load(Ordering::Relaxed)),
                 // Construct new storages if there are more allocated in shared memory/to match total_buf_len
                 None => {
-                    let storage_name: FileName = FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                    let storage_name: FileName =
+                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
                     match S::Builder::new(&storage_name).open() {
-                        Err(e) => panic!("Failed to open existing DynamicStorage {}: {:?}", storage_name, e),
+                        Err(e) => panic!(
+                            "Failed to open existing DynamicStorage {}: {:?}",
+                            storage_name, e
+                        ),
                         Ok(s) => {
                             bytes.push(s.get().load(Ordering::Relaxed));
                             self.data_storages.push(s);
@@ -236,7 +250,8 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 Some(storage) => storage.get().store(byte, Ordering::Relaxed),
                 // Create new storages if data to be written requires more space than currently allocated
                 None => {
-                    let storage_name: FileName = FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
+                    let storage_name: FileName =
+                        FileName::new(format!("{}_{}", &self.filename_prefix, offset).as_bytes())?;
                     let storage = S::Builder::new(&storage_name)
                         .create(AtomicU8::new(0))
                         .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?;

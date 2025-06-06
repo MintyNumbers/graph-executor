@@ -14,7 +14,11 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
     ) -> Result<Option<DirectedAcyclicGraph>> {
         // Old execution status for conditional write
         let old_execution_status = match new_execution_status {
-            ExecutionStatus::NonExecutable => return Err(anyhow!("New execution status cannot be ExecutionStatus::NonExecutable.")),
+            ExecutionStatus::NonExecutable => {
+                return Err(anyhow!(
+                    "New execution status cannot be ExecutionStatus::NonExecutable."
+                ))
+            }
             ExecutionStatus::Executable => ExecutionStatus::NonExecutable,
             ExecutionStatus::Executing => ExecutionStatus::Executable,
             ExecutionStatus::Executed => ExecutionStatus::Executing,
@@ -25,7 +29,8 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
 
         // Write data to shared memory if `data_condition` is equal to current state of data in shared memory
         let graph_bytes = self.read_from_shm()?;
-        let mut graph_in_shm = rmp_serde::from_slice::<DirectedAcyclicGraph>(graph_bytes.as_slice())?;
+        let mut graph_in_shm =
+            rmp_serde::from_slice::<DirectedAcyclicGraph>(graph_bytes.as_slice())?;
         match graph_in_shm[node_index].execution_status == old_execution_status {
             true => {
                 // Release write lock and return None on successful write

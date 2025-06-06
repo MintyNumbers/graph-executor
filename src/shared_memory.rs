@@ -13,7 +13,10 @@ mod tests {
     #[test]
     fn dag_serialize_deserialize() -> Result<()> {
         let graph_new = DirectedAcyclicGraph::new(
-            vec![(0, Node::new(String::from("Node 0 executed"))), (1, Node::new(String::from("Node 1 executed")))],
+            vec![
+                (0, Node::new(String::from("Node 0 executed"))),
+                (1, Node::new(String::from("Node 1 executed"))),
+            ],
             vec![Edge::new((0, 1))],
         )?;
 
@@ -37,8 +40,10 @@ mod tests {
     fn rwlock() -> Result<()> {
         // Create RwLock
         let filename_prefix = "cargo_test";
-        let write_lock = Semaphore::create(&format!("/{}_write_lock_write", filename_prefix), 1).map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
-        let read_count = Semaphore::create(&format!("/{}_read_count_write", filename_prefix), 0).map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
+        let write_lock = Semaphore::create(&format!("/{}_write_lock_write", filename_prefix), 1)
+            .map_err(|e| anyhow!("Failed to create write_lock: {}", e))?;
+        let read_count = Semaphore::create(&format!("/{}_read_count_write", filename_prefix), 0)
+            .map_err(|e| anyhow!("Failed to create read_count: {}", e))?;
         assert_eq!(
             write_lock
                 .get_value()

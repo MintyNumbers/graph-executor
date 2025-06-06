@@ -38,7 +38,11 @@ impl Default for Node {
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Struct Node, Node.args: {}, Node.execution_status: {}", self.args, self.execution_status)
+        write!(
+            f,
+            "Struct Node, Node.args: {}, Node.execution_status: {}",
+            self.args, self.execution_status
+        )
     }
 }
 
@@ -61,16 +65,16 @@ impl FromStr for Node {
             match part {
                 // Parsing `Node`'s `args`.
                 part if part.starts_with(" Node.args: ") => {
-                    node.args = String::from(
-                        part.strip_prefix(" Node.args: ")
-                            .ok_or(anyhow!("Node::from_str parsing error: no 'args: ' prefix despite successful check."))?,
-                    )
+                    node.args = String::from(part.strip_prefix(" Node.args: ").ok_or(anyhow!(
+                        "Node::from_str parsing error: no 'args: ' prefix despite successful check."
+                    ))?)
                 }
                 // Parsing `Node`'s `execution_status`.
                 part if part.starts_with(" Node.execution_status: ") => {
-                    node.execution_status = ExecutionStatus::from_str(part.strip_prefix(" Node.execution_status: ").ok_or(anyhow!(
-                        "Node::from_str parsing error: no ' execution_status: ' prefix despite successful check."
-                    ))?)?;
+                    node.execution_status =
+                        ExecutionStatus::from_str(part.strip_prefix(" Node.execution_status: ").ok_or(anyhow!(
+                            "Node::from_str parsing error: no ' execution_status: ' prefix despite successful check."
+                        ))?)?;
                 }
                 _ => (),
             }
@@ -84,9 +88,19 @@ impl Node {
     /// Executes a node's associated computation (currently: printing `self.args`).
     pub(crate) fn execute(&self) -> Result<()> {
         match self.execution_status {
-            ExecutionStatus::Executed => return Err(anyhow!("Trying to execute node which has already been executed.")),
-            ExecutionStatus::Executable => return Err(anyhow!("Trying to execute node which is not yet set for execution.")),
-            ExecutionStatus::NonExecutable => return Err(anyhow!("Trying to execute node which is not executable.")),
+            ExecutionStatus::Executed => {
+                return Err(anyhow!(
+                    "Trying to execute node which has already been executed."
+                ))
+            }
+            ExecutionStatus::Executable => {
+                return Err(anyhow!(
+                    "Trying to execute node which is not yet set for execution."
+                ))
+            }
+            ExecutionStatus::NonExecutable => {
+                return Err(anyhow!("Trying to execute node which is not executable."))
+            }
             ExecutionStatus::Executing => {
                 thread::sleep(Duration::from_secs(1)); // Sleep if no executable `Node` is available
                 println!("{}", self.args); // TODO: implement node execution.

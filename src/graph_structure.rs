@@ -5,7 +5,9 @@ pub mod node;
 
 #[cfg(test)]
 mod tests {
-    use super::{edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node};
+    use super::{
+        edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node,
+    };
     use petgraph::graph::NodeIndex;
     use std::{collections::VecDeque, str::FromStr};
 
@@ -25,14 +27,18 @@ mod tests {
             edge_from_str, edge_new,
             "`Edge::from_string()` and `Edge::new()` initializations are not equal."
         );
-        assert_eq!(edge_direct, edge_new, "`Edge {{}}` and `Edge::new()` initializations are not equal.");
+        assert_eq!(
+            edge_direct, edge_new,
+            "`Edge {{}}` and `Edge::new()` initializations are not equal."
+        );
     }
 
     // `Node` tests
 
     #[test]
     fn node_compare_equality_from_str_new_default() {
-        let node_from_str = Node::from_str("Struct Node, Node.args: , Node.executed: Executable").unwrap();
+        let node_from_str =
+            Node::from_str("Struct Node, Node.args: , Node.executed: Executable").unwrap();
         let node_new = Node::new(String::from(""));
         let node_default = Node::default();
 
@@ -44,7 +50,10 @@ mod tests {
             node_from_str, node_default,
             "`Node::from_string()` and `Node::default()` initializations are not equal."
         );
-        assert_eq!(node_new, node_default, "`Node::new()` and `Node::default()` initializations are not equal.");
+        assert_eq!(
+            node_new, node_default,
+            "`Node::new()` and `Node::default()` initializations are not equal."
+        );
     }
 
     #[test]
@@ -113,9 +122,14 @@ mod tests {
         .unwrap();
 
         let graph_from_str = DirectedAcyclicGraph::from_str(&format!("{}", graph_new)).unwrap();
-        let graph_from_bytes = rmp_serde::from_slice::<DirectedAcyclicGraph>(&rmp_serde::to_vec(&graph_new).unwrap()).unwrap();
+        let graph_from_bytes =
+            rmp_serde::from_slice::<DirectedAcyclicGraph>(&rmp_serde::to_vec(&graph_new).unwrap())
+                .unwrap();
 
-        assert_eq!(graph_new, graph_from_str, "`DAG::new()` and `DAG::from_str()` initializations are not equal.");
+        assert_eq!(
+            graph_new, graph_from_str,
+            "`DAG::new()` and `DAG::from_str()` initializations are not equal."
+        );
         assert_eq!(
             graph_new, graph_from_bytes,
             "`DAG::new()` and `DAG::from_bytes()` initializations are not equal."
@@ -179,16 +193,36 @@ mod tests {
         )
         .unwrap();
 
-        let parents = graph.get_parent_node_indeces(NodeIndex::new(3)).collect::<Vec<NodeIndex>>();
-        assert_eq!(parents, Vec::from([NodeIndex::new(1), NodeIndex::new(2)]), "Wrong parents of Node 3.");
+        let parents = graph
+            .get_parent_node_indeces(NodeIndex::new(3))
+            .collect::<Vec<NodeIndex>>();
+        assert_eq!(
+            parents,
+            Vec::from([NodeIndex::new(1), NodeIndex::new(2)]),
+            "Wrong parents of Node 3."
+        );
 
-        let parents = graph.get_parent_node_indeces(NodeIndex::new(2)).collect::<Vec<NodeIndex>>();
+        let parents = graph
+            .get_parent_node_indeces(NodeIndex::new(2))
+            .collect::<Vec<NodeIndex>>();
         assert_eq!(parents, Vec::new(), "Wrong parents of Node 2.");
 
-        let children = graph.get_child_node_indeces(NodeIndex::new(2)).collect::<Vec<NodeIndex>>();
-        assert_eq!(children, Vec::from([NodeIndex::new(3)]), "Wrong children of Node 2.");
+        let children = graph
+            .get_child_node_indeces(NodeIndex::new(2))
+            .collect::<Vec<NodeIndex>>();
+        assert_eq!(
+            children,
+            Vec::from([NodeIndex::new(3)]),
+            "Wrong children of Node 2."
+        );
 
-        let children = graph.get_child_node_indeces(NodeIndex::new(1)).collect::<Vec<NodeIndex>>();
-        assert_eq!(children, Vec::from([NodeIndex::new(3)]), "Wrong children of Node 1.");
+        let children = graph
+            .get_child_node_indeces(NodeIndex::new(1))
+            .collect::<Vec<NodeIndex>>();
+        assert_eq!(
+            children,
+            Vec::from([NodeIndex::new(3)]),
+            "Wrong children of Node 1."
+        );
     }
 }

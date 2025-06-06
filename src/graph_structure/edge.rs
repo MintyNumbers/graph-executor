@@ -40,8 +40,16 @@ impl FromStr for Edge {
 
         Ok(Edge {
             nodes: (
-                usize::from_str(*(parts.get(0).ok_or(anyhow!("Edge::from_str parsing error: Could not find first node index."))?))?,
-                usize::from_str(*(parts.get(1).ok_or(anyhow!("Edge::from_str parsing error: Could not find second node index."))?))?,
+                usize::from_str(
+                    *(parts.get(0).ok_or(anyhow!(
+                        "Edge::from_str parsing error: Could not find first node index."
+                    ))?),
+                )?,
+                usize::from_str(
+                    *(parts.get(1).ok_or(anyhow!(
+                        "Edge::from_str parsing error: Could not find second node index."
+                    ))?),
+                )?,
             ),
             // weight: 1,
         })

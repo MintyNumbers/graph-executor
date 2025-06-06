@@ -1,7 +1,13 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
 use anyhow::{anyhow, Error, Ok, Result};
-use petgraph::{acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, stable_graph::Neighbors, Direction};
-use std::{collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut, str::FromStr};
+use petgraph::{
+    acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, stable_graph::Neighbors,
+    Direction,
+};
+use std::{
+    collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut,
+    str::FromStr,
+};
 
 /// This struct is a wrapper for `petgraph`'s `StableDiGraph` implementation.
 
@@ -13,7 +19,11 @@ pub struct DirectedAcyclicGraph {
 
 impl fmt::Display for DirectedAcyclicGraph {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel]))
+        write!(
+            f,
+            "{}",
+            dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel])
+        )
     }
 }
 
@@ -33,16 +43,14 @@ impl FromStr for DirectedAcyclicGraph {
                 let split_line = line.trim().split(" ").collect::<Vec<&str>>();
 
                 // If a line looks like "0 [ label = "Node 0" ]" parse it as a `Node`.
-                if split_line[0].trim().chars().all(|c| c.is_ascii_digit()) && split_line[1].trim() == "[" {
+                if split_line[0].trim().chars().all(|c| c.is_ascii_digit())
+                    && split_line[1].trim() == "["
+                {
                     nodes.push((
                         split_line[0].trim().parse::<usize>()?,
-                        Node::from_str(
-                            *line
-                                .split('\"')
-                                .collect::<Vec<&str>>()
-                                .get(1)
-                                .ok_or(anyhow!("DirectedAcyclicGraph::from_str parsing error: No node label."))?,
-                        )?,
+                        Node::from_str(*line.split('\"').collect::<Vec<&str>>().get(1).ok_or(
+                            anyhow!("DirectedAcyclicGraph::from_str parsing error: No node label."),
+                        )?)?,
                     ));
                 }
                 // If a line looks like "0 -> 1 [ ]" parse it as an `Edge`.
@@ -51,7 +59,10 @@ impl FromStr for DirectedAcyclicGraph {
                     && split_line[2].trim().chars().all(|c| c.is_ascii_digit())
                     && split_line[3].trim() == "["
                 {
-                    edges.push(Edge::new((split_line[0].trim().parse::<usize>()?, split_line[2].trim().parse::<usize>()?)));
+                    edges.push(Edge::new((
+                        split_line[0].trim().parse::<usize>()?,
+                        split_line[2].trim().parse::<usize>()?,
+                    )));
                 }
             }
         }
@@ -75,7 +86,9 @@ impl IndexMut<NodeIndex> for DirectedAcyclicGraph {
 
 impl PartialEq for DirectedAcyclicGraph {
     fn eq(&self, other: &Self) -> bool {
-        if self.graph.node_indices().count() != other.graph.node_indices().count() || self.graph.edge_indices().count() != other.graph.edge_indices().count() {
+        if self.graph.node_indices().count() != other.graph.node_indices().count()
+            || self.graph.edge_indices().count() != other.graph.edge_indices().count()
+        {
             return false;
         }
         for n in self.graph.node_indices() {
@@ -117,12 +130,14 @@ impl DirectedAcyclicGraph {
                 graph.add_edge(node_indeces[&edge.nodes.0], node_indeces[&edge.nodes.1], 1);
 
                 // Set `ExecutionStatus` of `edge.nodes.1` to `NonExecutable`.
-                graph[node_indeces[&edge.nodes.1]].execution_status = ExecutionStatus::NonExecutable;
+                graph[node_indeces[&edge.nodes.1]].execution_status =
+                    ExecutionStatus::NonExecutable;
             }
         });
 
         // Check that `StableDiGraph` is acyclic and return `DirectedAcyclicGraph` if successful.
-        Acyclic::try_from_graph(&graph).map_err(|e| anyhow!("Cyclic graph supplied on {:?}", e.node_id()))?;
+        Acyclic::try_from_graph(&graph)
+            .map_err(|e| anyhow!("Cyclic graph supplied on {:?}", e.node_id()))?;
         Ok(DirectedAcyclicGraph { graph: graph })
     }
 
@@ -136,7 +151,13 @@ impl DirectedAcyclicGraph {
     /// graph.write_to_path("resources/example.dot")?;
     /// ```
     pub fn write_to_path(&self, path: &str) -> Result<()> {
-        write(path, &format!("{}", dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel])))?;
+        write(
+            path,
+            &format!(
+                "{}",
+                dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel])
+            ),
+        )?;
         Ok(())
     }
 
@@ -165,7 +186,13 @@ impl DirectedAcyclicGraph {
     pub fn is_graph_executed(&self) -> bool {
         self.graph
             .node_weights()
-            .filter_map(|n| if n.execution_status == ExecutionStatus::Executed { None } else { Some(n) })
+            .filter_map(|n| {
+                if n.execution_status == ExecutionStatus::Executed {
+                    None
+                } else {
+                    Some(n)
+                }
+            })
             .collect::<Vec<&Node>>()
             .is_empty()
     }
