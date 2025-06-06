@@ -9,15 +9,21 @@ mod tests {
         edge::Edge, execution_status::ExecutionStatus, graph::DirectedAcyclicGraph, node::Node,
     };
     use petgraph::graph::NodeIndex;
-    use std::{collections::VecDeque, str::FromStr};
+    use std::{
+        collections::{BTreeMap, VecDeque},
+        fs::read_to_string,
+        str::FromStr,
+    };
 
     // `Edge` tests
 
     #[test]
     fn edge_compare_equality_from_str_direct_new() {
         let edge_from_str = Edge::from_str("0 -> 1 [ ]").unwrap();
-        let edge_direct = Edge { nodes: (0, 1) };
-        let edge_new = Edge::new((0, 1));
+        let edge_direct = Edge {
+            nodes: (String::from("0"), String::from("1")),
+        };
+        let edge_new = Edge::new((String::from("0"), String::from("1")));
 
         assert_eq!(
             edge_from_str, edge_direct,
@@ -111,13 +117,29 @@ mod tests {
     #[test]
     fn dag_compare_equality_new_from_str_from_bytes() {
         let graph_new = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+                (
+                    String::from("2"),
+                    Node::new(String::from("Node 2 was just executed")),
+                ),
+                (
+                    String::from("3"),
+                    Node::new(String::from("Node 3 was just executed")),
+                ),
+            ]),
             vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
-                (2, Node::new(String::from("Node 2 was just executed"))),
-                (3, Node::new(String::from("Node 3 was just executed"))),
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("2"), String::from("3"))),
+                Edge::new((String::from("1"), String::from("3"))),
             ],
-            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
 
@@ -141,15 +163,108 @@ mod tests {
     }
 
     #[test]
+    fn dag_parse_from_string() {
+        let dag_from_file = DirectedAcyclicGraph::from_str(
+            &read_to_string("./resources/example-printed-dot-digraph.dot").unwrap(),
+        )
+        .unwrap();
+        let dag_initialized = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+                (
+                    String::from("2"),
+                    Node::new(String::from("Node 2 was just executed")),
+                ),
+                (
+                    String::from("3"),
+                    Node::new(String::from("Node 3 was just executed")),
+                ),
+                (
+                    String::from("4"),
+                    Node::new(String::from("Node 4 was just executed")),
+                ),
+                (
+                    String::from("5"),
+                    Node::new(String::from("Node 5 was just executed")),
+                ),
+                (
+                    String::from("6"),
+                    Node::new(String::from("Node 6 was just executed")),
+                ),
+            ]),
+            vec![
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("1"), String::from("3"))),
+                Edge::new((String::from("4"), String::from("3"))),
+                Edge::new((String::from("2"), String::from("4"))),
+                Edge::new((String::from("6"), String::from("3"))),
+                Edge::new((String::from("5"), String::from("4"))),
+                Edge::new((String::from("5"), String::from("6"))),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            dag_from_file, dag_initialized,
+            "DAG parsed from file and initialized manually not equal"
+        );
+
+        let dag_from_file_2 = DirectedAcyclicGraph::from_str(
+            &read_to_string("./resources/example-typical-dot-digraph.dot").unwrap(),
+        )
+        .unwrap();
+        let dag_initialized_2 = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (String::from("a"), Node::new("a".to_string())),
+                (String::from("b"), Node::new("b".to_string())),
+                (String::from("c"), Node::new("c".to_string())),
+                (String::from("d"), Node::new("d".to_string())),
+            ]),
+            vec![
+                Edge::new((String::from("a"), String::from("b"))),
+                Edge::new((String::from("b"), String::from("c"))),
+                Edge::new((String::from("b"), String::from("d"))),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            dag_from_file_2, dag_initialized_2,
+            "DAG parsed from file and initialized manually not equal"
+        );
+    }
+
+    #[test]
     fn dag_method_get_executable_node_indeces() {
         let graph = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+                (
+                    String::from("2"),
+                    Node::new(String::from("Node 2 was just executed")),
+                ),
+                (
+                    String::from("3"),
+                    Node::new(String::from("Node 3 was just executed")),
+                ),
+            ]),
             vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
-                (2, Node::new(String::from("Node 2 was just executed"))),
-                (3, Node::new(String::from("Node 3 was just executed"))),
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("2"), String::from("3"))),
+                Edge::new((String::from("1"), String::from("3"))),
             ],
-            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
 
@@ -165,11 +280,20 @@ mod tests {
     #[test]
     fn dag_fail_directed_cyclic_graph() {
         let err = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+            ]),
             vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("1"), String::from("0"))),
             ],
-            vec![Edge::new((0, 1)), Edge::new((1, 0))],
         )
         .unwrap_err();
 
@@ -183,13 +307,29 @@ mod tests {
     #[test]
     fn dag_get_parent_child_node_indeces() {
         let graph = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+                (
+                    String::from("2"),
+                    Node::new(String::from("Node 2 was just executed")),
+                ),
+                (
+                    String::from("3"),
+                    Node::new(String::from("Node 3 was just executed")),
+                ),
+            ]),
             vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
-                (2, Node::new(String::from("Node 2 was just executed"))),
-                (3, Node::new(String::from("Node 3 was just executed"))),
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("2"), String::from("3"))),
+                Edge::new((String::from("1"), String::from("3"))),
             ],
-            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
 

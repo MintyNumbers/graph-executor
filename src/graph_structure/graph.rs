@@ -5,7 +5,7 @@ use petgraph::{
     Direction,
 };
 use std::{
-    collections::HashMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut,
+    collections::BTreeMap, collections::VecDeque, fmt, fs::write, ops::Index, ops::IndexMut,
     str::FromStr,
 };
 
@@ -35,34 +35,83 @@ impl FromStr for DirectedAcyclicGraph {
     /// let graph = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
     /// ```
     fn from_str(dag_string: &str) -> Result<Self> {
-        let mut nodes: Vec<(usize, Node)> = vec![];
+        // Vectors for future `node`s and `edge`s of the new `DirectedAcyclicGraph`
+        let mut nodes: BTreeMap<String, Node> = BTreeMap::new();
         let mut edges: Vec<Edge> = vec![];
 
         if dag_string.trim().starts_with("digraph") {
             for line in dag_string.trim().split("\n") {
-                let split_line = line.trim().split(" ").collect::<Vec<&str>>();
+                let line = {
+                    if line.ends_with(";") {
+                        line.strip_suffix(";")
+                            .ok_or(anyhow!("No ; suffix despite successful check."))?
+                    } else {
+                        line
+                    }
+                };
 
-                // If a line looks like "0 [ label = "Node 0" ]" parse it as a `Node`.
-                if split_line[0].trim().chars().all(|c| c.is_ascii_digit())
-                    && split_line[1].trim() == "["
+                let line_split_space = line
+                    .trim()
+                    .split(" ")
+                    .map(|s| s.trim())
+                    .collect::<Vec<&str>>();
+
+                // Parse line as `Node` if it looks like:
+                // 0 [ label = "Struct Node, Node.args: -- Node 0 was just executed --, Node.execution_status: Executable" ]
+                if line_split_space.len() >= 6 && line_split_space[0].chars().all(|c| c.is_ascii_digit()) // 0
+                    && line_split_space[1] == "["                                // [
+                    && line_split_space[2] == "label"                            // label
+                    && line_split_space[3] == "="                                // =
+                    && line_split_space[4] == "\"Struct"                         // "Struct
+                    && line_split_space[5] == "Node,"                            // Node,
+                    && line_split_space[6] == "Node.args:"
+                // Node.args:
                 {
-                    nodes.push((
-                        split_line[0].trim().parse::<usize>()?,
+                    nodes.insert(
+                        line_split_space[0].to_string(),
                         Node::from_str(*line.split('\"').collect::<Vec<&str>>().get(1).ok_or(
                             anyhow!("DirectedAcyclicGraph::from_str parsing error: No node label."),
                         )?)?,
-                    ));
+                    );
                 }
-                // If a line looks like "0 -> 1 [ ]" parse it as an `Edge`.
-                else if split_line[0].trim().chars().all(|c| c.is_ascii_digit()) // 0
-                    && split_line[1].trim() == "->"                                    // ->
-                    && split_line[2].trim().chars().all(|c| c.is_ascii_digit())  // 1
-                    && split_line[3].trim() == "["                                     // [ ]
+                // Parse line as `Edge` if it looks like:
+                // 0 -> 1 [ ]
+                else if line_split_space.len() >= 4 && line_split_space[0].chars().all(|c| c.is_ascii_digit()) // 0
+                    && line_split_space[1] == "->"                                    // ->
+                    && line_split_space[2].chars().all(|c| c.is_ascii_digit())  // 1
+                    && line_split_space[3] == "["                                     // [
+                    && line_split_space[4] == "]"
+                // ]
                 {
                     edges.push(Edge::new((
-                        split_line[0].trim().parse::<usize>()?,
-                        split_line[2].trim().parse::<usize>()?,
+                        line_split_space[0].to_string(),
+                        line_split_space[2].to_string(),
                     )));
+                }
+                // Parse line as `Edge` and `Node` if it looks like the compact DOT syntax:
+                // a -> b -> c;
+                else if line_split_space.len() >= 3 && line_split_space[1] == "->" {
+                    let line_split_arrow = line
+                        .split("->")
+                        .into_iter()
+                        .map(|s| s.trim().to_string())
+                        .collect::<Vec<String>>();
+                    for (node_num, node_str_identifier) in line_split_arrow.iter().enumerate() {
+                        // Insert every node in chain a -> b -> c if it isn't included yet
+                        if !nodes.contains_key(node_str_identifier) {
+                            nodes.insert(
+                                node_str_identifier.clone(),
+                                Node::new(node_str_identifier.clone()),
+                            );
+                        }
+                        // Insert edge
+                        if node_num >= 1 {
+                            edges.push(Edge::new((
+                                line_split_arrow[node_num - 1].to_string(),
+                                line_split_arrow[node_num].to_string(),
+                            )));
+                        }
+                    }
                 }
             }
         }
@@ -115,20 +164,34 @@ impl DirectedAcyclicGraph {
     ///     vec![Edge::new((0, 1)), Edge::new((1, 2)), Edge::new((2, 3)), Edge::new((1, 3))],
     /// )?;
     /// ```
-    pub fn new(nodes: Vec<(usize, Node)>, edges: Vec<Edge>) -> Result<Self> {
+    pub fn new(nodes: BTreeMap<String, Node>, edges: Vec<Edge>) -> Result<Self> {
         let mut graph = StableDiGraph::<Node, i32>::new();
 
-        let node_indeces: HashMap<usize, NodeIndex> =
-            HashMap::from_iter(nodes.into_iter().map(|(i, node)| (i, graph.add_node(node))));
+        // Populate graph with all nodes.
+        let node_string_id_to_node_index_map: BTreeMap<String, NodeIndex> = nodes
+            .into_iter()
+            .map(|(string_id, node)| (string_id, graph.add_node(node)))
+            .collect();
 
         // Populate graph with all edges between nodes.
         edges.into_iter().for_each(|edge| {
-            if edge.nodes.0 < node_indeces.len() && edge.nodes.1 < node_indeces.len() {
-                graph.add_edge(node_indeces[&edge.nodes.0], node_indeces[&edge.nodes.1], 1);
+            if node_string_id_to_node_index_map.contains_key(&edge.nodes.0)
+                && node_string_id_to_node_index_map.contains_key(&edge.nodes.1)
+            {
+                graph.add_edge(
+                    node_string_id_to_node_index_map[&edge.nodes.0],
+                    node_string_id_to_node_index_map[&edge.nodes.1],
+                    1,
+                );
 
-                // Set `ExecutionStatus` of `edge.nodes.1` to `NonExecutable`.
-                graph[node_indeces[&edge.nodes.1]].execution_status =
+                // Set `ExecutionStatus` of child nodes to `NonExecutable`.
+                graph[node_string_id_to_node_index_map[&edge.nodes.1]].execution_status =
                     ExecutionStatus::NonExecutable;
+            } else {
+                println!(
+                    "One or more of nodes of edge is not defined as a node: {:?}",
+                    edge
+                );
             }
         });
 

@@ -5,18 +5,34 @@ pub mod shm_graph;
 mod tests {
     use crate::graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
     use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-    use std::sync::atomic::AtomicU8;
+    use std::{collections::BTreeMap, sync::atomic::AtomicU8};
 
     #[test]
     fn dag_method_execute_nodes_one_process() {
         let mut dag = DirectedAcyclicGraph::new(
+            BTreeMap::from([
+                (
+                    String::from("0"),
+                    Node::new(String::from("Node 0 was just executed")),
+                ),
+                (
+                    String::from("1"),
+                    Node::new(String::from("Node 1 was just executed")),
+                ),
+                (
+                    String::from("2"),
+                    Node::new(String::from("Node 2 was just executed")),
+                ),
+                (
+                    String::from("3"),
+                    Node::new(String::from("Node 3 was just executed")),
+                ),
+            ]),
             vec![
-                (0, Node::new(String::from("Node 0 was just executed"))),
-                (1, Node::new(String::from("Node 1 was just executed"))),
-                (2, Node::new(String::from("Node 2 was just executed"))),
-                (3, Node::new(String::from("Node 3 was just executed"))),
+                Edge::new((String::from("0"), String::from("1"))),
+                Edge::new((String::from("2"), String::from("3"))),
+                Edge::new((String::from("1"), String::from("3"))),
             ],
-            vec![Edge::new((0, 1)), Edge::new((2, 3)), Edge::new((1, 3))],
         )
         .unwrap();
         dag.execute_graph::<Storage<AtomicU8>>(String::from("test_shared_memory"))

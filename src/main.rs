@@ -20,17 +20,14 @@ fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} <digraph_file> <filename_suffix>", args[0]);
-        std::process::exit(1);
+        Err(anyhow!("Usage: {} <digraph_file> <filename_suffix>\nExample: {} ./resources/example-printed-dot-digraph.dot test", args[0], args[0]))?;
     }
-    let digraph_file: String = args[1].parse().unwrap_or_else(|_| {
-        eprintln!("Invalid digraph file: {}", args[1]);
-        std::process::exit(1);
-    });
-    let filename_suffix: String = args[2].parse().unwrap_or_else(|_| {
-        eprintln!("Invalid filename suffix: {}", args[2]);
-        std::process::exit(1);
-    });
+    let digraph_file: String = args[1]
+        .parse()
+        .map_err(|e| anyhow!("Error parsing digraph file {}: {}", args[1], e))?;
+    let filename_suffix: String = args[2]
+        .parse()
+        .map_err(|e| anyhow!("Invalid filename suffix {}: {}", args[2], e))?;
 
     // Read digraph from file and execute it
     let mut dag = DirectedAcyclicGraph::from_str(
