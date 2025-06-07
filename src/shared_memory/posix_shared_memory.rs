@@ -3,12 +3,15 @@ use anyhow::{anyhow, Result};
 use iceoryx2_bb_container::semantic_string::SemanticString;
 use iceoryx2_bb_system_types::file_name::FileName;
 use iceoryx2_cal::{
-    dynamic_storage::DynamicStorage, dynamic_storage::DynamicStorageBuilder,
-    named_concept::NamedConceptBuilder,
+    dynamic_storage::{
+        posix_shared_memory::{Builder, Storage},
+        DynamicStorage, DynamicStorageBuilder,
+    },
+    event::NamedConceptBuilder,
 };
 use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
-pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
+pub struct PosixSharedMemory {
     /// Suffix of all shared memory storages in `/dev/shm`
     filename_suffix: String,
     /// Write lock, 1: no current writer, 0: currently active writer
@@ -16,13 +19,10 @@ pub struct PosixSharedMemory<S: DynamicStorage<AtomicU8>> {
     /// Number of current readers
     read_count: Semaphore,
     /// Keep alive so that the storage is not discarded
-    data_storages: Vec<S>,
+    data_storages: Vec<Storage<AtomicU8>>,
 }
 
-impl<S> std::fmt::Debug for PosixSharedMemory<S>
-where
-    S: DynamicStorage<AtomicU8>,
-{
+impl std::fmt::Debug for PosixSharedMemory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
+impl PosixSharedMemory {
     /// Create new Iox2ShmMapping with n storages with filename_suffix.
     pub fn new(filename_suffix: &str, data: impl serde::Serialize + Debug) -> Result<Self> {
         let filename_suffix = filename_suffix.replace("/", "_"); // Handle slash in filename
@@ -181,9 +181,10 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 None => {
                     let storage_name: FileName =
                         FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
-                    match S::Builder::new(&storage_name).open() {
+                    match Builder::new(&storage_name).open() {
                         Err(e) => panic!("Failed to open existing DynamicStorage: {:?}", e),
                         Ok(s) => {
+                            let s: Storage<AtomicU8> = s;
                             bytes.push(s.get().load(Ordering::Relaxed));
                             self.data_storages.push(s);
                         }
@@ -202,12 +203,13 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 None => {
                     let storage_name: FileName =
                         FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
-                    match S::Builder::new(&storage_name).open() {
+                    match Builder::new(&storage_name).open() {
                         Err(e) => panic!(
                             "Failed to open existing DynamicStorage {}: {:?}",
                             storage_name, e
                         ),
                         Ok(s) => {
+                            let s: Storage<AtomicU8> = s;
                             bytes.push(s.get().load(Ordering::Relaxed));
                             self.data_storages.push(s);
                         }
@@ -252,7 +254,7 @@ impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
                 None => {
                     let storage_name: FileName =
                         FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
-                    let storage = S::Builder::new(&storage_name)
+                    let storage = Builder::new(&storage_name)
                         .create(AtomicU8::new(0))
                         .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?;
                     storage.get().store(byte, Ordering::Relaxed);

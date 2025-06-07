@@ -12,15 +12,19 @@ mod shared_memory_graph_execution;
 
 use anyhow::anyhow;
 use graph_structure::graph::DirectedAcyclicGraph;
-use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-use std::sync::atomic::AtomicU8;
+use std::process::exit;
 
 /// Main function.
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
-        Err(anyhow!("Usage: {} <digraph_file> <filename_suffix>\nExample: {} ./resources/example-printed-dot-digraph.dot test", args[0], args[0]))?;
+        eprintln!(
+            "Usage:   {} <digraph_file>                              <filename_suffix>\
+            \nExample: {} ./resources/example-printed-dot-digraph.dot test_filename_suffix",
+            args[0], args[0]
+        );
+        exit(1);
     }
     let digraph_file: String = args[1]
         .parse()
@@ -30,8 +34,7 @@ fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("Invalid filename suffix {}: {}", args[2], e))?;
 
     // Read digraph from file and execute it
-    DirectedAcyclicGraph::from_file(&digraph_file)?
-        .execute_graph::<Storage<AtomicU8>>(filename_suffix)?;
+    DirectedAcyclicGraph::from_file(&digraph_file)?.execute(filename_suffix)?;
 
     Ok(())
 }

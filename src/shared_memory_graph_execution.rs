@@ -4,8 +4,7 @@ pub mod shm_graph;
 #[cfg(test)]
 mod tests {
     use crate::graph_structure::{edge::Edge, graph::DirectedAcyclicGraph, node::Node};
-    use iceoryx2_cal::dynamic_storage::posix_shared_memory::Storage;
-    use std::{collections::BTreeMap, sync::atomic::AtomicU8};
+    use std::collections::BTreeMap;
 
     #[test]
     fn dag_method_execute_nodes_one_process() {
@@ -35,8 +34,7 @@ mod tests {
             ],
         )
         .unwrap();
-        dag.execute_graph::<Storage<AtomicU8>>(String::from("test_shared_memory"))
-            .unwrap();
+        dag.execute(String::from("test_shared_memory")).unwrap();
 
         assert_eq!(
             dag.is_graph_executed(),

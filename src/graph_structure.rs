@@ -269,7 +269,7 @@ mod tests {
         )
         .unwrap();
 
-        let executable_nodes_1 = graph.get_executable_node_indeces();
+        let executable_nodes_1 = graph.get_executable_node_indices();
         let executable_nodes_2 = VecDeque::from(vec![NodeIndex::new(0), NodeIndex::new(2)]);
 
         assert_eq!(
@@ -335,7 +335,7 @@ mod tests {
         .unwrap();
 
         let parents = graph
-            .get_parent_node_indeces(NodeIndex::new(3))
+            .get_parent_node_indices(NodeIndex::new(3))
             .collect::<Vec<NodeIndex>>();
         assert_eq!(
             parents,
@@ -344,12 +344,12 @@ mod tests {
         );
 
         let parents = graph
-            .get_parent_node_indeces(NodeIndex::new(2))
+            .get_parent_node_indices(NodeIndex::new(2))
             .collect::<Vec<NodeIndex>>();
         assert_eq!(parents, Vec::new(), "Wrong parents of Node 2.");
 
         let children = graph
-            .get_child_node_indeces(NodeIndex::new(2))
+            .get_child_node_indices(NodeIndex::new(2))
             .collect::<Vec<NodeIndex>>();
         assert_eq!(
             children,
@@ -358,7 +358,7 @@ mod tests {
         );
 
         let children = graph
-            .get_child_node_indeces(NodeIndex::new(1))
+            .get_child_node_indices(NodeIndex::new(1))
             .collect::<Vec<NodeIndex>>();
         assert_eq!(
             children,

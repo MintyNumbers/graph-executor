@@ -1,11 +1,9 @@
 use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
 use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
-use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use petgraph::graph::NodeIndex;
-use std::sync::atomic::AtomicU8;
 
-impl<S: DynamicStorage<AtomicU8>> PosixSharedMemory<S> {
+impl PosixSharedMemory {
     /// Acquire write lock and advance execution status to
     pub fn shm_compare_node_execution_status_and_update(
         &mut self,

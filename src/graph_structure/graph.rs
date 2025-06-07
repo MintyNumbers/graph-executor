@@ -155,7 +155,7 @@ impl PartialEq for DirectedAcyclicGraph {
 }
 
 impl DirectedAcyclicGraph {
-    /// Creates `DirectedAcyclicGraph` from `Vec<Node>` and `Vec<Edge>`.
+    /// Creates `DirectedAcyclicGraph` from `Vec<Node>` and `Vec<Edge>`. TODO: update docs
     ///
     /// You can create a `DirectedAcyclicGraph` like this:
     /// ```
@@ -201,10 +201,12 @@ impl DirectedAcyclicGraph {
         Ok(DirectedAcyclicGraph { graph: graph })
     }
 
-    pub fn from_file(digraph_file: &str) -> Result<Self> {
+    /// Creates `DirectedAcyclicGraph` from a path to a file containing a description of a
+    /// directed graph in the DOT language.
+    pub fn from_file(file_path: &str) -> Result<Self> {
         Ok(DirectedAcyclicGraph::from_str(
-            &read_to_string(digraph_file)
-                .map_err(|e| anyhow!("Failed reading file {}: {}", digraph_file, e))?,
+            &read_to_string(file_path)
+                .map_err(|e| anyhow!("Failed reading file {}: {}", file_path, e))?,
         )?)
     }
 
@@ -217,9 +219,9 @@ impl DirectedAcyclicGraph {
     /// )?;
     /// graph.write_to_path("resources/example.dot")?;
     /// ```
-    pub fn write_to_path(&self, path: &str) -> Result<()> {
+    pub fn to_file(&self, file_path: &str) -> Result<()> {
         write(
-            path,
+            file_path,
             &format!(
                 "{}",
                 dot::Dot::with_config(&self.graph, &[dot::Config::EdgeNoLabel])
@@ -229,7 +231,7 @@ impl DirectedAcyclicGraph {
     }
 
     /// Get all executable `Node` indeces.
-    pub(crate) fn get_executable_node_indeces(&self) -> VecDeque<NodeIndex> {
+    pub fn get_executable_node_indices(&self) -> VecDeque<NodeIndex> {
         self.graph
             .node_indices()
             .filter_map(|i| {
@@ -243,7 +245,7 @@ impl DirectedAcyclicGraph {
     }
 
     /// Get an executable `Node` index.
-    pub(crate) fn get_executable_node_index(&self) -> Option<NodeIndex> {
+    pub fn get_executable_node_index(&self) -> Option<NodeIndex> {
         self.graph
             .node_indices()
             .find(|i| self.graph[*i].execution_status == ExecutionStatus::Executable)
@@ -264,11 +266,11 @@ impl DirectedAcyclicGraph {
             .is_empty()
     }
 
-    pub fn get_parent_node_indeces(&self, index: NodeIndex) -> Neighbors<'_, i32> {
+    pub fn get_parent_node_indices(&self, index: NodeIndex) -> Neighbors<'_, i32> {
         self.graph.neighbors_directed(index, Direction::Incoming)
     }
 
-    pub fn get_child_node_indeces(&self, index: NodeIndex) -> Neighbors<'_, i32> {
+    pub fn get_child_node_indices(&self, index: NodeIndex) -> Neighbors<'_, i32> {
         self.graph.neighbors_directed(index, Direction::Outgoing)
     }
 }

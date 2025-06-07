@@ -1,18 +1,14 @@
 use crate::graph_structure::{execution_status::ExecutionStatus, graph::DirectedAcyclicGraph};
 use crate::shared_memory::posix_shared_memory::PosixSharedMemory;
 use anyhow::{anyhow, Result};
-use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use petgraph::graph::NodeIndex;
-use std::{collections::VecDeque, sync::atomic::AtomicU8, thread, time::Duration};
+use std::{collections::VecDeque, thread, time::Duration};
 
 impl DirectedAcyclicGraph {
     /// Execute graph stored in shared memory mapping.
-    pub fn execute_graph<S: DynamicStorage<AtomicU8>>(
-        &mut self,
-        filename_suffix: String,
-    ) -> Result<()> {
+    pub fn execute(&mut self, filename_suffix: String) -> Result<()> {
         // Create/open shared memory mapping for `graph`.
-        let mut shared_memory = match PosixSharedMemory::<S>::new(&filename_suffix, &self) {
+        let mut shared_memory = match PosixSharedMemory::new(&filename_suffix, &self) {
             Ok(shared_memory) => shared_memory,
             Err(e) => {
                 if e.to_string()
@@ -21,7 +17,7 @@ impl DirectedAcyclicGraph {
                         &filename_suffix
                     )
                 {
-                    PosixSharedMemory::<S>::open::<DirectedAcyclicGraph>(&filename_suffix)?.0
+                    PosixSharedMemory::open::<DirectedAcyclicGraph>(&filename_suffix)?.0
                 } else {
                     Err(anyhow!("Failed to create shared memory {}: {}", &filename_suffix, e))?
                 }
@@ -74,7 +70,7 @@ impl DirectedAcyclicGraph {
 
             // Get indeces of `Node`s that are now executable (due to all their parent nodes having been executed).
             let mut children_indeces: VecDeque<NodeIndex> =
-                self.get_child_node_indeces(node_index).collect();
+                self.get_child_node_indices(node_index).collect();
             // Iterate through all child nodes of `node_index`.
             while children_indeces.len() > 0 {
                 // Get first `child_index` from queue.
@@ -88,7 +84,7 @@ impl DirectedAcyclicGraph {
                 // Determine whether all parent nodes `p` of child node are executed or executing
                 let (all_executed, all_executed_or_executing) = {
                     let (mut all_executed, mut all_executed_or_executing) = (true, true);
-                    for p in self.get_parent_node_indeces(child_index) {
+                    for p in self.get_parent_node_indices(child_index) {
                         // If some node is executing, then not all parent nodes are executed
                         if self[p].execution_status == ExecutionStatus::Executing {
                             all_executed = false;
