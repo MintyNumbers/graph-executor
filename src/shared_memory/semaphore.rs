@@ -4,11 +4,6 @@ use libc::{
 };
 use std::{ffi::CStr, ffi::CString};
 
-#[cfg(target_os = "macos")]
-unsafe fn get_errno() -> i32 {
-    *libc::__error()
-}
-
 #[cfg(target_os = "linux")]
 unsafe fn get_errno() -> i32 {
     *libc::__errno_location()
@@ -148,6 +143,7 @@ impl Semaphore {
         Ok(())
     }
 
+    /// Retrieves the name of the semaphore
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -167,10 +163,6 @@ impl Semaphore {
             )));
         }
         Ok(value as u32)
-    }
-    #[cfg(target_os = "macos")]
-    pub fn get_value(&self) -> Result<u32, String> {
-        Ok(0)
     }
 }
 

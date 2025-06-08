@@ -79,7 +79,7 @@ impl DirectedAcyclicGraph {
                 ))?;
 
                 // Read graph from shared memory to learn newest execution statuses.
-                *self = shared_memory.read::<DirectedAcyclicGraph>()?;
+                *self = shared_memory.read()?;
 
                 // Determine whether all parent nodes `p` of child node are executed or executing
                 let (all_executed, all_executed_or_executing) = {
@@ -104,16 +104,15 @@ impl DirectedAcyclicGraph {
                 if all_executed {
                     // Write execution status to shared memory.
                     // Return value must be written immediately back to `current_graph`, because child node may be a parent of another child node.
-                    if let Some(new_dag_in_shm) = shared_memory
-                        .shm_compare_node_execution_status_and_update(
-                            child_index,
-                            ExecutionStatus::Executable,
-                        )?
-                    {
-                        self[child_index].execution_status =
-                            new_dag_in_shm[child_index].execution_status;
-                    } else {
-                        self[child_index].execution_status = ExecutionStatus::Executable;
+                    match shared_memory.shm_compare_node_execution_status_and_update(
+                        child_index,
+                        ExecutionStatus::Executable,
+                    )? {
+                        Some(new_dag_in_shm) => {
+                            self[child_index].execution_status =
+                                new_dag_in_shm[child_index].execution_status
+                        }
+                        None => self[child_index].execution_status = ExecutionStatus::Executable,
                     }
                 } else if all_executed_or_executing {
                     // Keep child index in queue to check parent execution status later to make sure node is set to executable.
