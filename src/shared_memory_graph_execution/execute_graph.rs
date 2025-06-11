@@ -10,18 +10,11 @@ impl DirectedAcyclicGraph {
         // Create/open shared memory mapping for `graph`.
         let mut shared_memory = match PosixSharedMemory::new(&filename_suffix, &self) {
             Ok(shared_memory) => shared_memory,
-            Err(e) => {
-                if e.to_string()
-                    == format!(
+            Err(e) if e.to_string() == format!(
                         "Failed to create write_lock: Failed to create semaphore /{}_write_lock: File exists (errno: 17)",
                         &filename_suffix
-                    )
-                {
-                    PosixSharedMemory::open::<DirectedAcyclicGraph>(&filename_suffix)?.0
-                } else {
-                    Err(anyhow!("Failed to create shared memory {}: {}", &filename_suffix, e))?
-                }
-            }
+                    ) => PosixSharedMemory::open::<DirectedAcyclicGraph>(&filename_suffix)?.0,
+            Err(e) => Err(anyhow!("Failed to create shared memory {}: {}", &filename_suffix, e))?
         };
 
         loop {
@@ -84,14 +77,14 @@ impl DirectedAcyclicGraph {
                 // Determine whether all parent nodes `p` of child node are executed or executing
                 let (all_executed, all_executed_or_executing) = {
                     let (mut all_executed, mut all_executed_or_executing) = (true, true);
-                    for p in self.get_parent_node_indices(child_index) {
+                    for parent_index in self.get_parent_node_indices(child_index) {
                         // If some node is executing, then not all parent nodes are executed
-                        if self[p].execution_status == ExecutionStatus::Executing {
+                        if self[parent_index].execution_status == ExecutionStatus::Executing {
                             all_executed = false;
                         }
                         // If some node is neither executed nor executing, then not all parent nodes are executed or executing
-                        else if self[p].execution_status != ExecutionStatus::Executed
-                            && self[p].execution_status != ExecutionStatus::Executing
+                        else if self[parent_index].execution_status != ExecutionStatus::Executed
+                            && self[parent_index].execution_status != ExecutionStatus::Executing
                         {
                             (all_executed, all_executed_or_executing) = (false, false);
                             break;

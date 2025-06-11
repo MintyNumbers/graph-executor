@@ -9,7 +9,11 @@ use iceoryx2_cal::{
     },
     event::NamedConceptBuilder,
 };
-use std::{fmt::Debug, sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
+use std::{
+    fmt::Debug,
+    sync::atomic::{AtomicU8, Ordering},
+    usize,
+};
 
 pub struct PosixSharedMemory {
     /// Suffix of all shared memory storages in `/dev/shm`
@@ -51,7 +55,7 @@ impl PosixSharedMemory {
         };
 
         // Initial write of data to shared memory
-        shm_mapping.write_to_shm(&data)?;
+        shm_mapping.write(&data)?;
 
         Ok(shm_mapping)
     }
@@ -184,8 +188,7 @@ impl PosixSharedMemory {
                     match Builder::new(&storage_name).open() {
                         Err(e) => panic!("Failed to open existing DynamicStorage: {:?}", e),
                         Ok(s) => {
-                            let s: Storage<AtomicU8> = s;
-                            bytes.push(s.get().load(Ordering::Relaxed));
+                            bytes.push((&s as &Storage<AtomicU8>).get().load(Ordering::Relaxed));
                             self.data_storages.push(s);
                         }
                     };
@@ -209,8 +212,7 @@ impl PosixSharedMemory {
                             storage_name, e
                         ),
                         Ok(s) => {
-                            let s: Storage<AtomicU8> = s;
-                            bytes.push(s.get().load(Ordering::Relaxed));
+                            bytes.push((&s as &Storage<AtomicU8>).get().load(Ordering::Relaxed));
                             self.data_storages.push(s);
                         }
                     };
@@ -252,13 +254,13 @@ impl PosixSharedMemory {
                 Some(storage) => storage.get().store(byte, Ordering::Relaxed),
                 // Create new storages if data to be written requires more space than currently allocated
                 None => {
-                    let storage_name: FileName =
-                        FileName::new(format!("{}_{}", &self.filename_suffix, offset).as_bytes())?;
-                    let storage = Builder::new(&storage_name)
-                        .create(AtomicU8::new(0))
-                        .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?;
-                    storage.get().store(byte, Ordering::Relaxed);
-                    self.data_storages.push(storage);
+                    self.data_storages.push(
+                        Builder::new(&FileName::new(
+                            format!("{}_{}", &self.filename_suffix, offset).as_bytes(),
+                        )?)
+                        .create(AtomicU8::from(byte))
+                        .map_err(|e| anyhow!("Failed to create new DynamicStorage: {:?}", e))?,
+                    );
                 }
             }
             offset += 1;
