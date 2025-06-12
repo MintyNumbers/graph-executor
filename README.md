@@ -29,7 +29,7 @@ To compile the graph executor component, the user has to follow these basic step
 After compiling the graph executor binary, the user can execute the graphs in the project's top-level `resources` directory by executing the binary from a terminal, along with a specified path to a DOT file of the graph e.g. `./resources/example-typical-dot-digraph.dot` and `filename_suffix` for the POSIX shared memory objects. Here is the output of the execution, ss we can see, all nodes are be executed in the order specified in `./resources/example-typical-dot-digraph.dot`.:
 
 ```bash
-vscode ➜ /workspaces/graph-executor (main) $  $./target/release/graph-executor ./resources/example-typical-dot-digraph.dot filename_suffix
+vscode ➜ /workspaces/graph-executor (main) $ ./target/release/graph-executor ./resources/example-typical-dot-digraph.dot filename_suffix
 a
 b
 c
