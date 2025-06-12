@@ -3,15 +3,15 @@ use std::{fmt, str::FromStr};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy)]
 pub enum ExecutionStatus {
-    /// The associated node's `execute()` method is finished.
+    /// The associated [`super::node::Node`]'s `execute()` method is finished.
     Executed,
-    /// The associated node currently runs its `execute()` method.
+    /// The associated [`super::node::Node`] currently runs its `execute()` method.
     Executing,
-    /// The associated node's `execute()` method is ready to run;
-    /// all its parent nodes have run their respective `execute()` methods.
+    /// The associated [`super::node::Node`]'s `execute()` method is ready to run;
+    /// all its parent [`super::node::Node`]s have run their respective `execute()` methods.
     Executable,
-    /// The associated node's `execute()` method is not ready to run;
-    /// not all its parent nodes have run their respective `execute()` methods.
+    /// The associated [`super::node::Node`]'s `execute()` method is not ready to run;
+    /// not all its parent [`super::node::Node`]s have run their respective `execute()` methods.
     NonExecutable,
 }
 
@@ -32,9 +32,9 @@ impl fmt::Display for ExecutionStatus {
 
 impl FromStr for ExecutionStatus {
     type Err = Error;
-    /// Parses `ExecutionStatus` from a string like: "Executed".
+    /// Parses [`ExecutionStatus`] from a string like: "Executed".
     ///
-    /// The following two `ExecutionStatus` are identical:
+    /// The following two [`ExecutionStatus`] are identical:
     /// ```
     /// let execution_status_from_str = ExecutionStatus::from_str("Executed").unwrap();
     /// let execution_status_direct = ExecutionStatus::Executed;

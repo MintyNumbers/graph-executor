@@ -13,7 +13,6 @@ pub(crate) fn read_lock(write_lock: &Semaphore, read_count: &Semaphore) -> Resul
         .wait()
         .map_err(|e| anyhow!("Failed locking write_lock semaphore: {}", e))?;
 
-    // TODO: decide whether this block is necessary
     match read_count.try_wait() {
         Ok(false) => (), // First reader
         Ok(true) => {
@@ -59,7 +58,6 @@ pub(crate) fn read_unlock(read_count: &Semaphore) -> Result<()> {
         Err(e) => return Err(anyhow!("Failed decrementing read_count semaphore: {}", e)),
     }
 
-    // TODO: decide whether this block is necessary
     match read_count.try_wait() {
         Ok(false) => (), // Last reader
         Ok(true) => {
@@ -109,8 +107,6 @@ pub(crate) fn write_lock(write_lock: &Semaphore, read_count: &Semaphore) -> Resu
 /// Release write lock by:
 /// - Increment write_lock semaphore value; a greater than 0 value indicates a writable state to other processes.
 pub(crate) fn write_unlock(write_lock: &Semaphore) -> Result<()> {
-    // TODO: decide if asserting no current readers is necessary (inner state validation check).
-
     write_lock
         .post()
         .map_err(|e| anyhow!("Failed posting write_lock Semaphore: {}", e))?;

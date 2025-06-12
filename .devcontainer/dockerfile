@@ -1,7 +1,10 @@
 FROM mcr.microsoft.com/devcontainers/rust:1.0.20-bookworm
 
-# Install graphviz-rs dependencies
-RUN apt-get update && apt-get upgrade -y && apt-get install -y graphviz clang
+# Install iceoryx2-pal dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y clang
+
+# # Install graphviz-rs dependencies
+# RUN apt-get update && apt-get upgrade -y && apt-get install -y graphviz
 
 # Set variable
 ENV RUST_BACKTRACE=1

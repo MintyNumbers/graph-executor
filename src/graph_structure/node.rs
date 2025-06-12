@@ -4,20 +4,20 @@ use std::{fmt, str::FromStr, thread, time::Duration};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Node {
-    // TODO: create an `ExecutableNode` Trait with an `execute` method, i.e. this struct will become obsolete.
+    /// Execution placeholder prior to implementing arbitrary computation execution.
     args: String,
     /// The execution status indicates, whether a node is executable / is currently executing / has already been executed.
-    /// Changes during the `Node`'s lifetime in the following order:
+    /// Changes during the [`Node`]'s lifetime in the following order:
     ///
-    /// 1. ExecutionStatus::NonExecutable if the node has at least one parent node which hasn't been executed.
-    /// 2. ExecutionStatus::Executable if no parent node hasn't been executed.
-    /// 3. ExecutionStatus::Executing if some process started executing this node.
-    /// 4. ExecutionStatus::Executed if the process has finished executing.
+    /// 1. [`ExecutionStatus::NonExecutable`] if the node has at least one parent node which hasn't been executed.
+    /// 2. [`ExecutionStatus::Executable`] if no parent node hasn't been executed.
+    /// 3. [`ExecutionStatus::Executing`] if some process started executing this node.
+    /// 4. [`ExecutionStatus::Executed`] if the process has finished executing.
     pub(crate) execution_status: ExecutionStatus,
 }
 
 impl Node {
-    /// Creates a new `Node`.
+    /// Creates a new [`Node`].
     pub fn new(args: String) -> Self {
         Node {
             args: args,
@@ -48,9 +48,9 @@ impl fmt::Display for Node {
 
 impl FromStr for Node {
     type Err = Error;
-    /// Parses `Node` from a string like: "Struct Node, Node.args: , Node.execution_status: Executable"
+    /// Parses [`Node`] from a string like: "Struct Node, Node.args: , Node.execution_status: Executable"
     ///
-    /// The following two `Node`s are identical:
+    /// The following two [`Node`]s are identical:
     /// ```
     /// let node_from_str = Node::from_str("Struct Node, Node.args: , Node.execution_status: Executable").unwrap();
     /// let node_new = Node::new(String::from(""));
@@ -85,7 +85,7 @@ impl FromStr for Node {
 }
 
 impl Node {
-    /// Executes a node's associated computation (currently: printing `self.args`).
+    /// Executes a [`Node`]'s associated computation (currently: printing `Node.args`).
     pub(crate) fn execute(&self) -> Result<()> {
         match self.execution_status {
             ExecutionStatus::Executed => {

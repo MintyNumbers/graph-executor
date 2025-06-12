@@ -15,6 +15,7 @@ use graph_structure::graph::DirectedAcyclicGraph;
 use std::process::exit;
 
 /// Main function.
+#[cfg(target_family = "unix")]
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let args: Vec<String> = std::env::args().collect();

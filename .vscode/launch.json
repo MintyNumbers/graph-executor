@@ -7,25 +7,9 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug first process",
-            "program": "${workspaceFolder}/dag/target/debug/dag",
-            "args": ["1"],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug second process",
-            "program": "${workspaceFolder}/dag/target/debug/dag",
-            "args": ["2"],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
             "name": "Debug graph execution",
-            "program": "${workspaceFolder}/dag/target/debug/dag",
-            "args": ["3"],
+            "program": "${workspaceFolder}/target/debug/graph-executor",
+            "args": ["./resources/example-printed-dot-digraph.dot", "test_filename_suffix"],
             "cwd": "${workspaceFolder}"
         },
     ]

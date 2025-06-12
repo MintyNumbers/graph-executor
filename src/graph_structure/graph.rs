@@ -1,4 +1,5 @@
 use super::{edge::Edge, execution_status::ExecutionStatus, node::Node};
+use crate::shared_memory::as_from_bytes::AsFromBytes;
 use anyhow::{anyhow, Error, Ok, Result};
 use petgraph::{
     acyclic::Acyclic, dot, graph::NodeIndex, prelude::StableDiGraph, stable_graph::Neighbors,
@@ -9,11 +10,11 @@ use std::{
     ops::IndexMut, str::FromStr,
 };
 
-/// This struct is a wrapper for `petgraph`'s `StableDiGraph` implementation.
+/// This struct is a wrapper for [`petgraph::prelude::StableDiGraph`] implementation.
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DirectedAcyclicGraph {
-    /// `petgraph`'s `StableDiGraph`.
+    /// [`petgraph::prelude::StableDiGraph`]
     graph: StableDiGraph<Node, i32>,
 }
 
@@ -29,13 +30,13 @@ impl fmt::Display for DirectedAcyclicGraph {
 
 impl FromStr for DirectedAcyclicGraph {
     type Err = Error;
-    /// Parses `DirectedAcyclicGraph` from String.
+    /// Parses [`DirectedAcyclicGraph`] from String.
     ///
     /// ```
-    /// let graph = DirectedAcyclicGraph::from_str(read_to_string("resources/example.dot")?.as_str())?;
+    /// let graph = DirectedAcyclicGraph::from_str(read_to_string("resources/example-typical-dot-digraph.dot")?.as_str())?;
     /// ```
     fn from_str(dag_string: &str) -> Result<Self> {
-        // Vectors for future `node`s and `edge`s of the new `DirectedAcyclicGraph`
+        // Vectors for future `node`s and `edge`s of the new [`DirectedAcyclicGraph`]
         let mut nodes: BTreeMap<String, Node> = BTreeMap::new();
         let mut edges: Vec<Edge> = vec![];
 
@@ -153,15 +154,25 @@ impl PartialEq for DirectedAcyclicGraph {
         true
     }
 }
+impl AsFromBytes for DirectedAcyclicGraph {}
 
 impl DirectedAcyclicGraph {
-    /// Creates `DirectedAcyclicGraph` from `Vec<Node>` and `Vec<Edge>`. TODO: update docs
+    /// Creates [`DirectedAcyclicGraph`] from [`Vec<Node>`] and [`Vec<Edge>`].
     ///
-    /// You can create a `DirectedAcyclicGraph` like this:
+    /// You can create a [`DirectedAcyclicGraph`] like this:
     /// ```
     /// let graph = DirectedAcyclicGraph::new(
-    ///     vec![Node::new(), Node::new(), Node::new(), Node::new()],
-    ///     vec![Edge::new((0, 1)), Edge::new((1, 2)), Edge::new((2, 3)), Edge::new((1, 3))],
+    ///     BTreeMap::from([
+    ///         (String::from("0"), Node::new(String::from("Node 0"))),
+    ///         (String::from("1"), Node::new(String::from("Node 1"))),
+    ///         (String::from("2"), Node::new(String::from("Node 2"))),
+    ///         (String::from("3"), Node::new(String::from("Node 3"))),
+    ///     ]),
+    ///     vec![
+    ///         Edge::new(String::from("0"), String::from("1")),
+    ///         Edge::new(String::from("2"), String::from("3")),
+    ///         Edge::new(String::from("1"), String::from("3")),
+    ///     ],
     /// )?;
     /// ```
     pub fn new(nodes: BTreeMap<String, Node>, edges: Vec<Edge>) -> Result<Self> {
@@ -201,7 +212,7 @@ impl DirectedAcyclicGraph {
         Ok(DirectedAcyclicGraph { graph: graph })
     }
 
-    /// Creates `DirectedAcyclicGraph` from a path to a file containing a description of a
+    /// Creates [`DirectedAcyclicGraph`] from a path to a file containing a description of a
     /// directed graph in the DOT language.
     pub fn from_file(file_path: &str) -> Result<Self> {
         Ok(DirectedAcyclicGraph::from_str(
@@ -210,7 +221,7 @@ impl DirectedAcyclicGraph {
         )?)
     }
 
-    /// Write `DirectedAcyclicGraph` to `path`.
+    /// Write [`DirectedAcyclicGraph`] to `path`.
     ///
     /// ```
     /// let graph = DirectedAcyclicGraph::new(
@@ -266,10 +277,12 @@ impl DirectedAcyclicGraph {
             .is_empty()
     }
 
+    /// Get all parent node indices of some node identified by [`NodeIndex`]
     pub fn get_parent_node_indices(&self, index: NodeIndex) -> Neighbors<'_, i32> {
         self.graph.neighbors_directed(index, Direction::Incoming)
     }
 
+    /// Get all child node indices of some node identified by [`NodeIndex`]
     pub fn get_child_node_indices(&self, index: NodeIndex) -> Neighbors<'_, i32> {
         self.graph.neighbors_directed(index, Direction::Outgoing)
     }

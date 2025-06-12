@@ -4,7 +4,8 @@ use anyhow::{anyhow, Result};
 use petgraph::graph::NodeIndex;
 
 impl PosixSharedMemory {
-    /// Acquire write lock and advance execution status to
+    /// Acquire write lock and advance execution status to the next in
+    /// [`crate::graph_structure::node::Node`]'s execution life cycle.
     pub fn shm_compare_node_execution_status_and_update(
         &mut self,
         node_index: NodeIndex,

@@ -1,3 +1,4 @@
+pub mod as_from_bytes;
 pub mod posix_shared_memory;
 pub mod rwlock;
 pub mod semaphore;

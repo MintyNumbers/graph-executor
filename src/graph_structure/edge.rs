@@ -11,7 +11,7 @@ pub struct Edge {
 }
 
 impl Edge {
-    /// Creates new `Edge` from two node indeces returned by `StableDiGraph` when adding `Node`s.
+    /// Creates new [`Edge`] from two node indeces returned by [`petgraph::prelude::StableDiGraph`] when adding [`super::node::Node`]s.
     pub fn new(parent: String, child: String /* , weight: i32 */) -> Self {
         Edge {
             parent,
@@ -23,9 +23,9 @@ impl Edge {
 
 impl FromStr for Edge {
     type Err = Error;
-    /// Parses `Edge` from a string like: "0 -> 1 [ ]"
+    /// Parses [`Edge`] from a string like: "0 -> 1 [ ]"
     ///
-    /// The following two `Edge`s are identical:
+    /// The following two [`Edge`]s are identical:
     /// ```
     /// let edge_from_str = Edge::from_str("0 -> 1 [ ]").unwrap();
     /// let edge_new = Edge::new((0, 1));

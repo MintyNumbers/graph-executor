@@ -9,11 +9,7 @@ use iceoryx2_cal::{
     },
     event::NamedConceptBuilder,
 };
-use std::{
-    fmt::Debug,
-    sync::atomic::{AtomicU8, Ordering},
-    usize,
-};
+use std::{sync::atomic::AtomicU8, sync::atomic::Ordering, usize};
 
 pub struct PosixSharedMemory {
     /// Suffix of all shared memory storages in `/dev/shm`
@@ -38,7 +34,7 @@ impl std::fmt::Debug for PosixSharedMemory {
 
 impl PosixSharedMemory {
     /// Create new Iox2ShmMapping with n storages with filename_suffix.
-    pub fn new(filename_suffix: &str, data: impl serde::Serialize + Debug) -> Result<Self> {
+    pub fn new(filename_suffix: &str, data: impl serde::Serialize) -> Result<Self> {
         let filename_suffix = filename_suffix.replace("/", "_"); // Handle slash in filename
 
         // Create RwLock, construct shared memory mapping
