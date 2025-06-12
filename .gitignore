@@ -25,4 +25,5 @@ rust-project.json
 # End of https://www.toptal.com/developers/gitignore/api/rust,rust-analyzer
 
 # User-defined
-resources/
+resources/*
+!resources/example-*-digraph.dot

@@ -3,15 +3,19 @@ use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge {
-    pub(crate) nodes: (usize, usize),
+    /// Directed edge (connection) between two nodes.
+    /// First index indicates the parent and the second the child node.
+    pub(crate) parent: String,
+    pub(crate) child: String,
     // pub weight: i32,
 }
 
 impl Edge {
-    /// Creates new `Edge` from two node indeces returned by `StableDiGraph` when adding `Node`s.
-    pub fn new(nodes: (usize, usize) /* , weight: i32 */) -> Self {
+    /// Creates new [`Edge`] from two node indeces returned by [`petgraph::prelude::StableDiGraph`] when adding [`super::node::Node`]s.
+    pub fn new(parent: String, child: String /* , weight: i32 */) -> Self {
         Edge {
-            nodes: (nodes.0, nodes.1),
+            parent,
+            child,
             // weight: weight,
         }
     }
@@ -19,9 +23,9 @@ impl Edge {
 
 impl FromStr for Edge {
     type Err = Error;
-    /// Parses `Edge` from a string like: "0 -> 1 [ ]"
+    /// Parses [`Edge`] from a string like: "0 -> 1 [ ]"
     ///
-    /// The following two `Edge`s are identical:
+    /// The following two [`Edge`]s are identical:
     /// ```
     /// let edge_from_str = Edge::from_str("0 -> 1 [ ]").unwrap();
     /// let edge_new = Edge::new((0, 1));
@@ -37,10 +41,18 @@ impl FromStr for Edge {
         .collect();
 
         Ok(Edge {
-            nodes: (
-                usize::from_str(*(parts.get(0).ok_or(anyhow!("Edge::from_str parsing error: Could not find first node index."))?))?,
-                usize::from_str(*(parts.get(1).ok_or(anyhow!("Edge::from_str parsing error: Could not find second node index."))?))?,
-            ),
+            parent: parts
+                .get(0)
+                .ok_or(anyhow!(
+                    "Edge::from_str parsing error: Could not find first node index."
+                ))?
+                .to_string(),
+            child: parts
+                .get(1)
+                .ok_or(anyhow!(
+                    "Edge::from_str parsing error: Could not find second node index."
+                ))?
+                .to_string(),
             // weight: 1,
         })
     }

@@ -1,13 +1,8 @@
-use libc::{c_int, c_uint, sem_close, sem_open, sem_post, sem_trywait, sem_unlink, sem_wait, strerror, O_CREAT, O_EXCL, SEM_FAILED, S_IRUSR, S_IWUSR};
-// use serde::{Deserialize, Serialize};
-use std::{
-    ffi::CStr,
-    ffi::CString,
-    // fs::{remove_file, OpenOptions},
-    // os::{fd::AsRawFd, unix::fs::OpenOptionsExt},
-    // ptr, thread,
-    // time::Duration,
+use libc::{
+    c_int, c_uint, sem_close, sem_open, sem_post, sem_trywait, sem_unlink, sem_wait, strerror,
+    O_CREAT, O_EXCL, SEM_FAILED, S_IRUSR, S_IWUSR,
 };
+use std::{ffi::CStr, ffi::CString};
 
 #[cfg(target_os = "macos")]
 unsafe fn get_errno() -> i32 {
@@ -24,7 +19,12 @@ fn get_last_error(context: &str) -> String {
     unsafe {
         let err = get_errno();
         let err_str = strerror(err);
-        format!("{}: {} (errno: {})", context, CStr::from_ptr(err_str).to_string_lossy(), err)
+        format!(
+            "{}: {} (errno: {})",
+            context,
+            CStr::from_ptr(err_str).to_string_lossy(),
+            err
+        )
     }
 }
 
@@ -48,10 +48,20 @@ impl Semaphore {
     /// * `Err(String)` if the creation fails.
     pub fn create(name: &str, initial_value: u32) -> Result<Self, String> {
         let name_cstr = CString::new(name).map_err(|_| "Invalid semaphore name".to_string())?;
-        let id = unsafe { sem_open(name_cstr.as_ptr(), O_CREAT | O_EXCL, (S_IRUSR | S_IWUSR) as c_int, initial_value as c_uint) };
+        let id = unsafe {
+            sem_open(
+                name_cstr.as_ptr(),
+                O_CREAT | O_EXCL,
+                (S_IRUSR | S_IWUSR) as c_int,
+                initial_value as c_uint,
+            )
+        };
 
         if id == SEM_FAILED {
-            return Err(get_last_error(&format!("Failed to create semaphore {}", name)));
+            return Err(get_last_error(&format!(
+                "Failed to create semaphore {}",
+                name
+            )));
         }
 
         Ok(Self {
@@ -74,7 +84,10 @@ impl Semaphore {
         let id = unsafe { sem_open(name_cstr.as_ptr(), 0) };
 
         if id == SEM_FAILED {
-            return Err(get_last_error(&format!("Failed to open semaphore {}", name)));
+            return Err(get_last_error(&format!(
+                "Failed to open semaphore {}",
+                name
+            )));
         }
 
         Ok(Self {
@@ -91,7 +104,10 @@ impl Semaphore {
     /// * `Err(String)` if the operation fails.
     pub fn wait(&self) -> Result<(), String> {
         if unsafe { sem_wait(self.id) } == -1 {
-            return Err(get_last_error(&format!("Failed to lock semaphore {}", self.name)));
+            return Err(get_last_error(&format!(
+                "Failed to lock semaphore {}",
+                self.name
+            )));
         }
         Ok(())
     }
@@ -109,7 +125,10 @@ impl Semaphore {
                 // The  operation  could  not  be  performed without blocking (i.e., the semaphore currently has the value zero).
                 return Ok(false);
             }
-            return Err(get_last_error(&format!("Failed to try-lock semaphore {}", self.name)));
+            return Err(get_last_error(&format!(
+                "Failed to try-lock semaphore {}",
+                self.name
+            )));
         }
         Ok(true)
     }
@@ -121,11 +140,15 @@ impl Semaphore {
     /// * `Err(String)` if the operation fails.
     pub fn post(&self) -> Result<(), String> {
         if unsafe { sem_post(self.id) } == -1 {
-            return Err(get_last_error(&format!("Failed to unlock semaphore {}", self.name)));
+            return Err(get_last_error(&format!(
+                "Failed to unlock semaphore {}",
+                self.name
+            )));
         }
         Ok(())
     }
 
+    /// Retrieves the name of the semaphore
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -139,7 +162,10 @@ impl Semaphore {
     pub fn get_value(&self) -> Result<u32, String> {
         let mut value: c_int = 0;
         if unsafe { libc::sem_getvalue(self.id, &mut value) } == -1 {
-            return Err(get_last_error(&format!("Failed to get semaphore value {}", self.name)));
+            return Err(get_last_error(&format!(
+                "Failed to get semaphore value {}",
+                self.name
+            )));
         }
         Ok(value as u32)
     }

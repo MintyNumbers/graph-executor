@@ -1,0 +1,16 @@
+digraph {
+    0 [ label = "Struct Node, Node.args: Node 0 was just executed, Node.execution_status: Executable" ]
+    1 [ label = "Struct Node, Node.args: Node 1 was just executed, Node.execution_status: NonExecutable" ]
+    2 [ label = "Struct Node, Node.args: Node 2 was just executed, Node.execution_status: Executable" ]
+    3 [ label = "Struct Node, Node.args: Node 3 was just executed, Node.execution_status: NonExecutable" ]
+    4 [ label = "Struct Node, Node.args: Node 4 was just executed, Node.execution_status: NonExecutable" ]
+    5 [ label = "Struct Node, Node.args: Node 5 was just executed, Node.execution_status: Executable" ]
+    6 [ label = "Struct Node, Node.args: Node 6 was just executed, Node.execution_status: NonExecutable" ]
+    0 -> 1 [ ]
+    1 -> 3 [ ]
+    4 -> 3 [ ]
+    2 -> 4 [ ]
+    6 -> 3 [ ]
+    5 -> 4 [ ]
+    5 -> 6 [ ]
+}
